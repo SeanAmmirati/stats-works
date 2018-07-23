@@ -2,8 +2,7 @@
 title: "Approaches To Contingency Tables"
 author: "Sean Ammirati"
 date: "July 22, 2018"
-output:
-  rmarkdown::github_document
+output: github_document
 ---
 
 #Chi-Squared Test
