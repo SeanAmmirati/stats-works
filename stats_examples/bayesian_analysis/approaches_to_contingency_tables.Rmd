@@ -2,7 +2,7 @@
 title: "Approaches To Contingency Tables"
 author: "Sean Ammirati"
 date: "July 22, 2018"
-output: github_document
+output: html_document
 ---
 
 #Chi-Squared Test
@@ -31,9 +31,10 @@ cont_table_exp <- matrix(c(10, 10, 25, 25), nrow = 2,
 cont_table_exp
 ``` 
 If we assume that artistry and travel likelihood are independent, our sum of the differences from this expectation divided by the square root of the expectation 
-should be roughly normally distributed and so the squared differences will be approximately chi-squared distributed.
-Here, we assume that the observed counts are Poisson distributed, so that their expectation and variance are defined by E and 1/sqrt(E)
-This is because we are essentially summing independent r.v.s. As n -> infinity, this is asymptotically normal GIVEN the hypothesis of independence. 
+should be roughly normally distributed and so the squared differences will be approximately $\chi ^{2}\left ( 1 \right )$.
+ 
+Here, we assume that the observed counts are Poisson distributed, so that their expectation and variance are defined by $E_{i}$ and $\frac{1}{\sqrt{E_{i}}}$.
+As $n \to \infty$, this is asymptotically normal GIVEN the hypothesis of independence. 
 
 Because we know the row and column totals, in this case we have a degree of freedom of 1 -- when one value is known on this contingency table,
 given the row and column totals we can deduce the others. In order to calculate an (approximate) probability of this example given independence 
@@ -80,7 +81,8 @@ less than or equal to five, we would do the following in this case:
 ```{r}
 sum(sapply(0:5,function(x) probfun(x, 20, 35, 35)))
 ```
-This shows that the probability of what we have observed is quite small if the columns and rows are independent. We again reject independence with 1% significance. 
+This shows that the probability of what we have observed is quite small if the columns and rows are independent. We again reject independence with 1% significance.
+
 The results of this test and the chisquared test are also quite close, which is as expected. As n goes to infinity, the chisquared test converges to the Fischer's Exact test. 
 
 This is the hyper geometric distribution, which is included in R. The results are the same:
@@ -92,15 +94,13 @@ These are well known tests we can make. However, we can add some bayesian analys
 # Bayesian Approach -- using Beta distributions
 
 Let us assume that the probability of having traveled for artists and non-artists can be modeled using a Beta distribution. That is 
-p(travel|non-artist) = p ~ Beta(alpha1, Beta1) and p(travel|artist) = q ~ Beta(alpha2, Beta2).
+\[P(travel \mid nonartist) = p \sim \ {Beta}(\alpha _{1}, \beta _{1})\]  and \[P(travel \mid artist) = q \sim \ {Beta}(\alpha _{2}, \beta _{2})\]
 
-We can now make an approximation to determine the probability that p < q. That is, we want the posterior distribution of p and q given
+We can now make an approximation to determine the probability that $p < q$. That is, we want the posterior distribution of $p$ and $q$ given
 our contingency table. Because our likelihood is multinomial, we know that the posterior distribution is also Beta distributed. After doing some 
-manipulations, we can write the posterior distribution of p and q. 
+manipulations, we can write the posterior distribution of $p$ and $q$. 
 
-This is actually a Dirichlet probability distribution. This is the multivariate extension of the Beta distribution. 
-
- If we assume uninformative priors, we set alpha = beta = -1 to get the following:
+ If we assume uninformative priors, we set $\alpha = \beta = 1$ to get the following:
 ```{r}
 posteriorb <- function(p,q, cont_table, num = FALSE){
   if (num == TRUE) {
@@ -118,10 +118,10 @@ posteriorb <- function(p,q, cont_table, num = FALSE){
   return(ret)
 }
 ```
-Note that this will only work for 2x2 contingency tables and assuming a prior of alpha = beta = -1 for each prior. If we wanted to include 
+Note that this will only work for 2x2 contingency tables and assuming an (invalid) prior of $\alpha = \beta = 1$  for each prior. If we wanted to include 
 prior information, we could change these for each prior, which would result in a different number being added/subtracted above. 
 
-The Dirichlet distribution is a continuous, multivariate distribution, so determining the actual probabilities here may be difficult to do. There are alternative
+This joint distribution is somewhat difficult to determine analytically. There are alternative
 here to estimate this probability (gtools, MCMCpack, etc), but I have included a numerical approximation. 
 
 ```{r}
@@ -132,15 +132,15 @@ approx <- function(f,num=FALSE, ...) {
 estim <- approx(posteriorb,TRUE, cont_table = cont_table)/approx(posteriorb, cont_table = cont_table)
 estim
 ```
-We estimate P(p< q) = .9965571. Here, we individual values of p,q and compare their pdf evaluations at each point. 
+We estimate ${P}(p< q) = .9966$. Here, we individual values of p,q and compare their pdf evaluations at each point. 
 
 # Bayesian Approach -- Assuming Dependence Structure
 
-Let's use another formulation that allows p and q to depend on one another. That is, it is unlikely that p and q are distributed independently -- 
+Let's use another formulation that allows $p$ and $q$ to depend on one another. That is, it is unlikely that $p$ and $q$ are distributed independently -- 
 there is an underlying 'willing to travel' factor that is prevalent in both groups. We saw this when we considered the earlier tests.  
-If we assume then that p/(1-p) - q/(1-q) or the difference in their 
-odds ratios is normally distributed with mean 0 and variance sigma squared, we are allowing for some dependencies based on the value of 
-sigma squared that we select. Selecting a small value of sigmasquared introduces a higher dependency structure.
+If we assume then that $\ln \frac{p}{1-p} - \ln \frac{q}{1-q}$, the difference in their log odds ratios is normally distributed with mean 0 and some arbitrary variance, 
+we are allowing for some dependencies based on the value of sigma squared that we select. 
+Selecting a small value of sigmasquared introduces a higher dependency structure.
 We can then test, for a certain level of expected variance in their difference, whether they are independent or not. 
 
 ```{r}
@@ -161,7 +161,7 @@ posteriorc <- function(p,q, cont_table, num = FALSE, sigmasq = 1){
   return(ret)
 }
 ```
-We then approximate the probability that p < q given various assumed sigmas in the prior. 
+We then approximate ${P}(p< q)$ given various assumed sigmas in the prior. 
 ```{r}
 estimb1 <- approx(posteriorc,num = TRUE,cont_table = cont_table, sigmasq = 1)/approx(posteriorc,num = FALSE, cont_table = cont_table, sigmasq = 1)
 estimb2 <- approx(posteriorc,num = TRUE,cont_table = cont_table, sigmasq = .25)/approx(posteriorc,num = FALSE, cont_table = cont_table, sigmasq = .25)
@@ -177,8 +177,7 @@ estimb3
 #sigma sq = 400000 (close to complete independence)
 approx(posteriorc,num = TRUE, cont_table = cont_table, sigmasq = 400000)/approx(posteriorc,num = FALSE, cont_table = cont_table, sigmasq = 400000)
 ```
-We see that the larger the variance, the higher the probability that p <= q, that is, that the probabilities are 
-different in the two groups. When we condsidered them to be independent, in part b, we got an estimate of 
+We see that the larger the variance, the higher ${P}(p< q)$ is. When we condsidered them to be independent, we got an estimate of 
 .9965571. It makes sense, then, that as we increase the variance, and therefore the two become closer to being 
 what we would consider as independent from one another, it approaches the value when they are assumed to be independent 
 explicitly. Considering them to have a small variance (.25) will lead to the probability p < q to be smaller than any other 

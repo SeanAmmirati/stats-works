@@ -1,3 +1,4 @@
+
 ## Here we will be investigating a few ways of dealing with contingency tables. 
 
 ## The first two are standard procedures in frequentist statistics, the chi-squared test and the Fischer's Exact test. 
