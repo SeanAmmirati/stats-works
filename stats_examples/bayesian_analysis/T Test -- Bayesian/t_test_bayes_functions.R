@@ -1,5 +1,3 @@
-
-
 test_equality_means <- function(norm_vec1, norm_vec2){
   sx <- var(norm_vec1)
   sy <- var(norm_vec2)

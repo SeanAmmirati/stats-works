@@ -60,23 +60,3 @@ find_posterior <- function(pos_lambda, prior_probs, X){
   posterior = probs
   return(posterior)
 }
-
-## Example: Consider that we believe that people in most counties will have a severe allergic reaction around 1.5 times per day. 
-## We have an expert who has just moved to XYZ county who thinks that this is not the case in the county. He wants to test this hypothesis on 
-## stretches of the last two weeks, where he believes we have seen a lower number of alergic reactions. 
-## (There was 12 incidents in the first 6 days, and zero in the last seven)
-
-## Suppose that we know (by some empirical estimation) that counties in the US approximately have probabilities .1,.2,.3,.2,.15,.05 of their rates 
-## being .5,1,1.5,2,2.5,4 respectively.
-## We believe that the distribution of the number of severe alergic reactions follows a Poisson distribution with rate lambda. That is, the rate is constant in 
-## a given county, and each event occurs independently of one another (i.e., one person having an alergic reaction does not effect the probability of another
-## having one). Given these assumptions, we want to check the probability of the rates given our new data. 
-
-poslam_example <- c(.5,1,1.5,2,2.5,4)
-probs_example <- c(.1,.2,.3,.2,.15,.05)
-X_example <- data.frame(k = c(12, 6), t = c(0, 7))
-
-find_posterior(poslam_example, probs_example, X_example)
-
-## What is the conclusion? The expert seems to be on to something -- there appears to be more evidence at the current time that lambda is actually 1 rather than
-## 1.5. More trials would find tune this result further. 
