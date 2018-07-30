@@ -1,0 +1,72 @@
+---
+title: "ARIMA_modelling_robot_ds"
+author: "Sean Ammirati"
+date: "July 29, 2018"
+output: html_document
+---
+
+```{r}
+library(TSA)
+```
+For this analysis, we will be looking at the robot data in the TSA package to invesitigate fitting an ARIMA model. 
+```{r}
+data(robot)
+head(robot)
+ts.plot(robot)
+```
+
+We could use a stationary model, but it appears that there is a downward trend over time, which would suggest non-stationarity. Just based on this plot, I would say that this data is not stationary, as it seems that there is more going on here than just the relationships between the lags. As time goes on, there seems to be a trend that depends on t, which would make this non-stationary. 
+```{r}
+acf(robot)
+pacf(robot)
+```
+
+Based on these plots, it is not clear which model should be used. This could be due to the non-stationarity of the data itself. It more closely resembles an AR model, as these values stay relatively within the boundaries of the standard errors. Based on this, an AR(3) or AR(6) model may be appropriate. 
+```{r}
+eacf(robot)
+```
+
+Based on the EACF above, I would say that an ARMA(1,1) model seems the most appropriate. As neither the above two graphs pointed to either, it makes sense that a combination may be the most optimal. 
+```{r}
+plot(armasubsets(robot,nar=12,nma=12))
+```
+
+Based on the best subset selection, we can see that my earlier feelings towards AR1 were correct, as the most significant models all contain the first coefficient for the AR model. However, this suggests that we also include the first and tenth coefficients from the MA model in our final model, as these produced the lowest BIC.  
+```{r}
+ar1<-arima(robot,order=c(1,0,0))
+difma1<-arima(robot,order=c(0,1,1))
+```
+
+I have fit the models and found the coefficients above. The differencing model has a lower AIC, so based on AIC alone the differencing model is a more appropriate model to use. The differences in the AIC are very small, however. Interestingly, this includes a MA model for the differencing, while our earlier analysis was using the AR(1) models. 
+```{r}
+ar1
+```
+
+From here, we can see that the standard error for the differencing model are much lower relative to their estimates as compared to the AR(1) model. However, both are statistically significant. We also see that the sigma^2 estimate is larger for the AR(1) model, suggesting the differencing model is accounting for more of the variability in the error terms.  
+```{r}
+plot((ar1$residuals-mean(ar1$residuals))/sd(ar1$residuals),type="p")
+abline(h=mean((ar1$residuals-mean(ar1$residuals))/sd(ar1$residuals)))
+plot((difma1$residuals-mean(difma1$residuals))/sd(difma1$residuals),type="p")
+abline(h=0)
+```
+
+For both models, the residuals look roughly normal with a mean of zero. There doesn't seem to be any identifiable pattern, which is good. Both models produce roughly normally distributed residuals.  
+```{r}
+qqnorm(residuals(ar1));qqline(residuals(ar1))
+qqnorm(residuals(difma1));qqline(residuals(difma1))
+```
+
+Looking at the Q-Q Plots we can confirm our earlier findings. It appears that the differencing model may have some slight problems at the higher and lower ends of the spectrum, as they are not fitting the line. Still, the errors appear roughly normal and I doubt this would have much of a quantifiable effect on the analysis of either model. 
+
+```{r}
+acf(residuals(ar1))
+acf(residuals(difma1))
+```
+
+Now we can spot some issues. The residuals for the AR(1) model do seem to be correlated with one another based on the autocorrelation function, which is not good. This confirms my earlier belief in non-stationarity - as the process itself is not stationary, it makes sense that the autocorrelations are not time independent. The differencing appears to remove some of this problem, but there are still cases where the autocorrelations jump outside of the expected range. 
+```{r}
+LB.test(ar1)
+LB.test(difma1)
+```
+
+Here, we yet again can see how the differencing model is outperforming our original AR(1) model, with the AR(1) model having a p-value less than 2.201 for the Box-Ljung test, meaning that we can reject the hypothesis that the autocorrelations are independent. This should not be the case if our assumptions are correct. On the other hand, the differencing model does not have sufficient evident to disprove independence of the autocorrelations, which is preferable. All in all, the AIC ended up being a good litmus test for these models, as in terms of these diagnostics it appears that the differencing model is a better model to use. This all meets our expectations: as the original time series was not stationary, the differencing method produced better results. 

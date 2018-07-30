@@ -1,0 +1,28 @@
+---
+title: "ARIMA on Deere3 Dataset"
+author: "Sean Ammirati"
+  
+output:
+  html_document: default
+---
+```{r}
+library(TSA)
+```
+# Analyzing the Deere3 dataset in TSA using ARIMA
+```{r}
+data(deere3)
+head(deere3)
+m1 <- arima(deere3,c(1,0,0))
+
+predict(m1,n.ahead=10)
+mean(deere3)
+
+ts.plot(deere3)
+plot(m1,n.ahead=10);abline(h=mean(deere3),lty=2)
+```
+
+First, I stored an arima fit for the deere3 dataset in a variable called m1. I then predicted the next 10 steps ahead. Since we know ARMA models tend to forcast to the mean, I also found the mean, which reaffirms this belief. 
+
+Using the plot.Arima function shows us the time series and the next 10 forcasted values, as well as the confidence intervals around them. The time series appears to jump around quite significantly in the nearer period. There is not a discernable pattern here, as far as we can tell by just looking at it. 
+
+In terms of the ARMA model: As expected, the confidence intervals widen as we get farther and farther away from the last recorded value. Also, I inserted a horizonal line at the mean to view visually the way the ARMA model will forcast towards the mean. It is unlikely that this produces very accurate observations beyond perhaps the first or second prediction outwards. 

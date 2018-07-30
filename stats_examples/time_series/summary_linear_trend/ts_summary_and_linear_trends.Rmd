@@ -1,0 +1,64 @@
+---
+title: "decomposition_linear_trend_summary"
+author: "Sean Ammirati"
+date: "July 29, 2018"
+output: html_document
+---
+
+```{r}
+library(TSA)
+data(hours)
+```
+We use the "hours" dataset in the TSA package to look at some simple time series models. 
+```{r}
+plot(hours)
+points(hours,pch=as.vector(season(hours)))
+plot(decompose(hours))
+```
+
+We can see that there is very little apparent seasonality in this data at first glance, as there seems to be somewhat random jumps at times. There is a clear upward trend as the years increase, suggesting that the hours worked was on the rise between 1983 and 1987.
+
+Looking at the plot with the months denoted by symbols, we can more clearly see some of the relationships. Although there is a good deal of variation, you can see some common traits -- for instance, between January and December of each year there is an increase, if you look at those points individually. The end of the year seems to result in an uptick in the hours worked, and the transition to the new year resulted in downticks. Also, between June and July sees a similar drop in every year. 
+
+Other relationships are less clear -- for instance, as the year goes on, in 1983 there was a relatively steady increase (apart from Feburary), while in 1984 there was a good deal of jumping around. While there are some recurrences (September dropping to October, rising in November) there is not a clear case of seasonality in this data, besides the differences between the beggining and the end of the year, and some of the relationships between individual months. Still, it does not have a clear pattern in the middle months. 
+
+The decomposition function also expresses this point -- when R produces a trend and a seasonality, the errors do not appear truly random, and the trend line accounts for much of the change in the data. While there are some patterns in the seasons, for the middle months there is still a great deal of variation and I would not be comfortable using this information to forecast for those months.
+
+```{r}
+data(retail)
+plot(retail)
+points(retail,pch=as.vector(season(retail)))
+plot(decompose(retail))
+```
+
+There is a clear seasonality in this data which adds up with my preconceptions of retail -- the holiday months result in huge upticks in sales. It is very clear it is not seasonally adjusted! We see that there is a clear pattern in the amount of sales in the year, with sales in the beggining months increasing relatively flatly while there is a large increase towards the end of the year. 
+
+There is also an upward trend throughout the years, suggesting that there is an increase in retail sales by year. The decomposition shows this more clearly, as the errors are relatively normal. It seems that each year, sales in December are increasing as well, which would explain why the errors are shaped as they are, since averaging in December will result in the first few years being overestimations, and the last few years being underestimations.
+
+# Seasonal Means Model
+```{r}
+month.<-season(retail)
+t<-time(retail)-1986
+seasonalmeans<-lm(retail~month.-1)
+seasonalmeans2<-lm(retail~t+month.-1)
+summary(seasonalmeans)
+summary(seasonalmeans2)
+```
+I created a model first with the seasonal means, and then with the seasonal means with the linear trend added. I subtracted 1986 from the time variable, so that 1986 would be interpreted as year 0. 
+
+This confirms my findings earlier, as the expected means increase as the year goes on, with the highest expected mean sales in December. Since this is simply averaging the seasonal means, the p-value is uninteresting -- of course the expected retail sales per month will be different than zero (at least, we would hope so if we were a retail store). Adding the linear time trend, we see that the sales are increasing over time.
+
+```{r}
+plot(y=rstudent(seasonalmeans2),x=as.vector(time(retail))-1986,type="o",pch=as.vector(season(retail)))
+plot(y=rstudent(seasonalmeans),x=as.vector(fitted(seasonalmeans)),pch=as.vector(season(retail)))
+plot(y=rstudent(seasonalmeans2),x=as.vector(fitted(seasonalmeans)),pch=as.vector(season(retail)))
+hist(rstudent(seasonalmeans2))
+qqnorm(rstudent(seasonalmeans2))
+qqline(rstudent(seasonalmeans2))
+```
+
+I first look at the residuals from the full model with the linear trend added. We can see that the largest deviations from the model is on the left and right side of the graph, indicating that the model is producing better output when closer to the middle, which is expected, as seasonal means simply averages the sales from each month. The largest variations are in December, which is also expected as this was evident earlier from the decomposition. This is easier to see with the second plot, which looks at the fitted vs actual for the model only with seasonal means.We see the greatest variation in December, with a relatively normal distribution around the mean.
+
+From the histogram, we can see a relatively normal distribution that is highly concentrated in the center, with one outlier far below. This is good -- it indicates that the residuals are close to normally distibuted. The qqplot confirms this -- while it is not a straight line, it is very close to the line we would expect from a normally distributed outcome, again with more variation towards the left and right of the graph.
+
+

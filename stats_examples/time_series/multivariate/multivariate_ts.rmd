@@ -1,0 +1,68 @@
+
+---
+title: "GARCH_temperatures"
+author: "Sean Ammirati"
+date: "November 8, 2016"
+output: html_document
+---
+```{r}
+library(vars)
+data(Canada)
+```
+
+
+## First Look at Data
+```{r}
+can <- Canada
+head(can)
+summary(can)
+```
+First, we import the dataset into a variable called can. We get some basic statistics (the quartiles, median and mean) with the summary function. I first try a VAR model of high dimension, where p=5, but this proves to have many insignificant variables. I then use VARselect to find the best model to fit.
+```{r}
+mod<-VAR(Canada,5,type="both")
+summary(mod)
+
+VARselect(Canada,lag.max=10,type="both")
+```
+# Using VARselect to fit models
+
+The results are conflicting. Based on the AIC and FPE, I should use a VAR model with p = 3. According to SC, I should use a VAR model wth p = 1. I try all alternatives below. 
+```{r}
+mod2<-VAR(Canada,2,type="both")
+mod3<-VAR(Canada,1,type="both")
+mod4<-VAR(Canada,3,type="both")
+summary(mod2)
+summary(mod3)
+summary(mod4)
+```
+We can see that mod3, with p = 1, has quite significant results. The AIC for mod4 is lower, however, so it may be worthwhile to look at both. I will focus on mod3, using p = 1, but will also produce forcasts for mod4 to look at the results. First,  we can see a summary of each of the variables' model -- as each variable in this multivariate time series has its own model and significance. 
+```{r}
+summary(mod3,equation="e")
+summary(mod3,equation="prod")
+summary(mod3,equation="rw")
+summary(mod3,equation="U")
+```
+We can see simialr results as from the main summary function. Some variables produce more significant variables in the models than others -- for instance, rw has only a few variables which are deemed to be significantly significant, while U has far more. Since this now introduces covariances between the enteries, it is not so easy to just 'remove' the unsignficant variables from the model, as this may have an adverse effect on the other predictors. All of the variables have quite high R-Squared values, which seems good. Using the plot function and looking at the arch.test and serial.test, we can see the goodness of fit for this model. 
+
+```{r fig.height=20, fig.width=30}
+par(mar=c(1,1,1,1))
+plot(mod3)
+tests<-serial.test(mod3,lags.pt=20,type="PT.asymptotic")
+tests$serial
+
+
+arch.mod3<-arch.test(mod3)
+arch.mod3
+plot(arch.mod3)
+```
+
+```{r fig.height=30, fig.width=50}
+pred.mod3<-predict(mod3,n.ahead=4,ci=.95)
+pred.mod4<-predict(mod4,n.ahead=4,ci=.95)
+plot(pred.mod3)
+fanchart(pred.mod3)
+pred.mod3.2<-predict(mod3,n.ahead=4,ci=.99)
+plot(pred.mod3.2)
+fanchart(pred.mod3.2)
+plot(pred.mod4)
+```

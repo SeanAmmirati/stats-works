@@ -1,0 +1,341 @@
+```{r}
+source('./tsa_functions.R')
+library(rdatamarket)
+library(forecast)
+library(prophet)
+library(tidyr)
+library(TSA)
+library(lubridate)
+```
+---
+title: "Time Series: Lake Erie"
+author: "Sean Ammirati"
+date: "October 22, 2016"
+output: html_document
+---
+For more information, please see the Word or PDF files included in this folder. 
+
+# Importing the data
+```{r}
+lkerie<-dmseries("https://datamarket.com/data/set/22pw/monthly-lake-erie-levels-1921-1970#!ds=22pw&display=line")
+length(lkerie)
+
+lkerietrain<-as.ts(lkerie[1:(length(lkerie)-12)])
+lkerietest<-lkerie[(length(lkerie)-11):length(lkerie)]
+tail(lkerietrain)
+
+lkerie<-as.ts(lkerie)
+head(lkerie)
+```
+# Seasonal Means Model
+```{r}
+season.<-season(lkerie)
+time.<-time(lkerie)
+seasonmean<-lm(lkerie~season.+time.)
+
+summary(seasonmean)
+
+plot(lkerie)
+points(y=lkerie,x=time(lkerie),pch=as.vector(season(lkerie)))
+```
+# Decomposition
+```{r}
+madecomp<-decompose(lkerie)
+plot(madecomp)
+madecomp$seasonal[1:12]
+```
+#HoltWinters
+```{r}
+hw1<-HoltWinters(lkerietrain)
+hw1
+plot(hw1)
+
+hw2<-HoltWinters(lkerietrain,beta=NULL,seasonal="multiplicative")
+hw2
+plot(hw2)
+
+hw1pred<-predict(hw1,n.ahead=12,prediction.interval=TRUE)
+hw2pred<-predict(hw2,n.ahead=12,prediction.interval=TRUE)
+
+plot(forecast(hw1,12))
+plot(forecast(hw2,12))
+
+ssehw1<-sse(hw1pred[,1], lkerietest)
+ssehw2<-sse(hw2pred[,1], lkerietest)
+```
+
+# SARIMA 
+```{r}
+ts.plot(lkerie)
+ts.plot(log(lkerie))
+ts.plot(diff(lkerie))
+ts.plot(diff(log(lkerie)))
+
+
+BxCx<-BoxCox.ar(lkerie)
+root<-BxCx$mle
+ts.plot(diff(lkerie^(root)))
+
+lkerietrain.trans<-diff(log(lkerie))
+
+plot(lkerietrain.trans)
+mean(lkerie)
+mean(diff(lkerie))
+mean(diff(log(lkerie)),lag=12)
+mean(diff(lkerie^root))
+
+a<-armasubsets(lkerietrain.trans,nar=12,nma=12)
+plot(a)
+auto.arima(lkerietrain.trans)
+get.best.arima(lkerietrain.trans,maxord=c(2,2,2,2,2,2))
+
+
+acf(lkerietrain.trans)
+pacf(lkerietrain.trans)
+eacf(lkerietrain.trans)
+
+sarima1<-arima(log(lkerietrain), order = c(0, 1, 1), seasonal = list(order = c(2, 0, 2), frequency(lkerietrain)), 
+               method = "CSS")
+sarima2<-arima(log(lkerietrain), order = c(1, 0, 1), seasonal = list(order = c(0, 1, 1), frequency(lkerietrain)), 
+               method = "CSS")
+
+sarima1pred<-predict(sarima1,n.ahead=12)
+sarima2pred<-predict(sarima2,n.ahead=12)
+
+predarima1<-exp(sarima1pred$pred)
+predarima2<-exp(sarima2pred$pred)
+
+searima1<-exp(sarima1pred$se)
+searima2<-exp(sarima2pred$se)
+
+ts.plot(lkerietrain,predarima1,col="red",main="SARIMA 1",xlab="Time",ylab="Water Level")
+lines(x=c(time(lkerie)),c(lkerietrain,(predarima1+1.96*searima1)),col="red",lty="dashed")
+lines(x=c(time(lkerie)),c(lkerietrain,(predarima1-1.96*searima1)),col="red",lty="dashed")
+lines(lkerietrain)
+
+ts.plot(lkerietrain,predarima2,col="blue",main="SARIMA 2",xlab="Time",ylab="Water Level")
+lines(x=c(time(lkerie)),c(lkerietrain,(predarima2+1.96*searima2)),col="blue",lty="dashed")
+lines(x=c(time(lkerie)),c(lkerietrain,(predarima2-1.96*searima2)),col="blue",lty="dashed")
+lines(lkerietrain)
+
+ssesarima1<-sse(predarima1, lkerietest)
+ssesarima2<-sse(predarima2, lkerietest)
+
+plot(residuals(sarima1))
+plot(residuals(sarima2))
+
+qqnorm(y=residuals(sarima1))
+qqnorm(y=residuals(sarima2)) 
+
+acf(residuals(sarima1))
+acf(residuals(sarima1)^2)
+pacf(residuals(sarima1))
+pacf(residuals(sarima1)^2)
+
+acf(residuals(sarima2))
+acf(residuals(sarima2)^2)
+pacf(residuals(sarima2))
+pacf(residuals(sarima2)^2)
+```
+
+# Spectral Analysis
+```{r}
+spec.per<-spec(log(lkerietrain))
+frequencies<-spec.per$freq[order(spec.per$spec,decreasing=TRUE)]
+t<-1:length((log(lkerietrain)))
+length(t)
+cc1<-as.numeric(cos(2*pi*frequencies[1]*t))
+d1<-sin(2*pi*frequencies[1]*t)
+c2<-cos(2*pi*frequencies[2]*t)
+d2<-sin(2*pi*frequencies[2]*t)
+c3<-cos(2*pi*frequencies[3]*t)
+d3<-sin(2*pi*frequencies[3]*t)
+c4<-cos(2*pi*frequencies[4]*t)
+d4<-sin(2*pi*frequencies[4]*t)
+c5<-cos(2*pi*frequencies[5]*t)
+d5<-sin(2*pi*frequencies[5]*t)
+c6<-cos(2*pi*frequencies[6]*t)
+d6<-sin(2*pi*frequencies[6]*t)
+c7<-cos(2*pi*frequencies[7]*t)
+d7<-sin(2*pi*frequencies[7]*t)
+c8<-cos(2*pi*frequencies[8]*t)
+d8<-sin(2*pi*frequencies[8]*t)
+c9<-cos(2*pi*frequencies[9]*t)
+d9<-sin(2*pi*frequencies[9]*t)
+c10<-cos(2*pi*frequencies[10]*t)
+d10<-sin(2*pi*frequencies[10]*t)
+
+
+
+
+spec.m1<-lm(log(lkerietrain)~cc1+c2+c3+c4+c5+c6+c7+c8+c9+c10+d1+d2+d3+d4+d5+d6+d7+d8+d9+d10+t)
+summary(spec.m1)
+
+plot(exp(fitted(spec.m1)),type="l",col="blue")
+lines(t,lkerietrain)
+
+
+
+test<-cbind(c(589:600),cos(2*pi*frequencies[1]*(589:600)),
+            sin(2*pi*frequencies[1]*(589:600)),
+            cos(2*pi*frequencies[2]*(589:600)),
+            sin(2*pi*frequencies[2]*(589:600)),
+            cos(2*pi*frequencies[3]*(589:600)),
+            sin(2*pi*frequencies[3]*(589:600)),
+            cos(2*pi*frequencies[4]*(589:600)),
+            sin(2*pi*frequencies[4]*(589:600)),
+            cos(2*pi*frequencies[5]*(589:600)),
+            sin(2*pi*frequencies[5]*(589:600)),
+            cos(2*pi*frequencies[6]*(589:600)),
+            sin(2*pi*frequencies[6]*(589:600)),
+            cos(2*pi*frequencies[7]*(589:600)),
+            sin(2*pi*frequencies[7]*(589:600)),
+            cos(2*pi*frequencies[8]*(589:600)),
+            sin(2*pi*frequencies[8]*(589:600)),
+            cos(2*pi*frequencies[9]*(589:600)),
+            sin(2*pi*frequencies[9]*(589:600)),
+            cos(2*pi*frequencies[10]*(589:600)),
+            sin(2*pi*frequencies[10]*(589:600)))
+
+colnames(test)=c("t","cc1","d1","c2","d2","c3","d3","c4","d4","c5","d5","c6","d6","c7","d7","c8","d8","c9","d9","c10","d10")
+
+plot(lkerietrain)
+models<-list()
+
+for(i in 1:10){
+  beg<-"cc1+d1"
+  if(i>1){
+    for(s in 2:i){
+      beg<-paste(beg,paste("c",s,sep=""),paste("d",s,sep=""),sep="+")
+    }
+  }
+  end<-paste(beg,"t",sep="+")
+  models[[i]]<-lm(formula(paste("log(lkerietrain)","~",end,sep="")))
+  pre<-exp(fitted(models[[i]]))
+  sub<-lkerietrain-exp(fitted(models[[i]]))
+  arimasub<-Arima(sub, order=c(1,0,1))
+  print(i)
+  print(sum(((arimasub$fitted+pre)-lkerietrain)^2))
+}
+
+
+summary(models[[2]])
+summary(models[[4]])##c4 is insignificant, remove it 
+models[[4]]<-lm(log(lkerietrain)~cc1+c2+c3+d1+d2+d3+d4+t)
+
+sub1<-lkerietrain-exp(fitted(models[[2]]))
+sub2<-lkerietrain-exp(fitted(models[[4]]))
+plot(sub1)
+plot(sub2)
+
+acf(sub1)
+pacf(sub1)
+acf(sub2)
+pacf(sub2)
+
+eacf(sub1)
+eacf(sub2)
+
+plot(armasubsets(sub1,nar=10,nma=10))
+plot(armasubsets(sub2,nar=10,nma=10))
+
+auto.arima(sub1)
+auto.arima(sub2)
+
+get.best.arima(sub1,c(2,2,2,2,2,2))
+get.best.arima(sub2,c(2,2,2,2,2,2))
+
+a1spec1<-Arima(sub1,c(1,0,1))
+a2spec1<-auto.arima(sub1)
+a3spec1<-Arima(y = sub1, order = c(1, 0, 1), seasonal = c(0, 1, 1), 
+               method = "CSS")
+a1spec2<-Arima(sub2,c(1,0,1))
+a2spec2<-auto.arima(sub2)
+a3spec2<-Arima(y = sub2, order = c(2, 1, 1), seasonal = c(1, 0, 1), 
+               method = "CSS")
+
+resid1<-residuals(a3spec1)
+resid2<-residuals(a3spec2)
+
+plot(resid1)
+plot(resid2)
+
+acf(resid1)
+acf(resid1^2)
+pacf(resid2)
+pacf(resid2^2)
+
+
+specpred1<-exp(predict(models[[2]],newdata=as.data.frame(test)))
+specpred2<-exp(predict(models[[4]],newdata=as.data.frame(test)))
+
+arimapred1<-predict(a3spec1,n.ahead=12)$pred
+arimapred2<-predict(a3spec2,n.ahead=12)$pred
+
+arimase1<-predict(a3spec1,n.ahead=12)$se
+arimase2<-predict(a3spec2,n.ahead=12)$se
+
+finalpred1<-specpred1+arimapred1
+finalpred2<-specpred2+arimapred2
+
+ssesp1<-sse(finalpred1, lkerietest)
+ssesp2<-sse(finalpred2, lkerietest)
+
+ssesp1/12
+ssesp2/12
+
+plot(x=time(lkerie),c(lkerietrain,finalpred1),ty="l",main="Forecast of Spec 1",xlab="Time",ylab="Water Level")
+lines(x=c(time(lkerie)),c(lkerietrain,finalpred1+1.96*arimase1),lty="dashed",col="blue")
+lines(x=c(time(lkerie)),c(lkerietrain,finalpred1-1.96*arimase1),lty="dashed",col="blue")
+lines(lkerietrain,col="black")
+
+plot(x=time(lkerie),c(lkerietrain,finalpred2),ty="l",main="Forecast of Spec 2",xlab="Time",ylab="Water Level")
+lines(x=c(time(lkerie)),c(lkerietrain,finalpred2+1.96*arimase2),lty="dashed",col="red")
+lines(x=c(time(lkerie)),c(lkerietrain,finalpred2-1.96*arimase2),lty="dashed",col="red")
+lines(lkerietrain,col="black")
+```
+# Prophet
+```{r}
+ds <- as.Date.ts(lkerietrain)
+y<-as.numeric((log(lkerietrain)))
+df<-data.frame(ds,y)
+prop<-prophet(df,weekly.seasonality=TRUE)
+
+future <- make_future_dataframe(prop, period = 12,freq="m")
+forecast <- prophet:::predict.prophet(prop, future)
+fitproph<-exp((forecast$yhat)[1:(length(forecast$yhat)-12)])
+predproph<-exp((forecast$yhat)[(length(forecast$yhat)-11):length(forecast$yhat)])
+confintup<-exp((forecast$yhat_upper)[(length(forecast$yhat)-11):length(forecast$yhat)])
+confintlow<-confintup<-exp((forecast$yhat_lower)[(length(forecast$yhat)-11):length(forecast$yhat)])
+
+plot(x=time(lkerie),c(lkerietrain,predproph),type="l",col="red",main="Prophet forecasts",xlab="Time",ylab="Water Level")
+lines(x=c(time(lkerie)),c(lkerietrain,confintup),type="l",lty="dashed",col="red")
+lines(x=c(time(lkerie)),c(lkerietrain,confintlow),type="l",lty="dashed",col="red")
+lines(lkerietrain)
+
+sseproph<-sse(predproph, lkerietest)
+```
+
+# Comparing Results
+```{r}
+results<-data.frame(c(ssehw1,ssehw2,ssesarima1,ssesarima2,ssesp1,ssesp2,sseproph))
+colnames(results)<-"SSE"
+rownames(results)<-(c("HW 1","HW 2","SARIMA 1","SARIMA 2","Spec 1","Spec 2","Prophet"))
+results
+
+length(lkerie)
+range<-560:600
+plot(time(lkerie)[range],lkerie[range],ty="l",xlab="Time",ylab="Water Level",main="Overview of Models Used")
+addplot(finalpred1,range,colors2[1])
+addplot(finalpred2,range,colors2[2])
+addplot(predarima1,range,colors2[3])
+addplot(predarima2,range,colors2[4])
+addplot(hw1pred,range,colors2[5])
+addplot(hw2pred,range,colors2[6])
+addplot(predproph,range,colors2[7])
+lines(lkerie[range])
+
+
+legend('topleft', c("True","Spec 1","Spec 2","SARIMA 1","SARIMA 2","HW 1","HW 2","Prophet"),col=c("black",colors2), 
+       lty="dashed", bty='n', cex=.75)
+``` 

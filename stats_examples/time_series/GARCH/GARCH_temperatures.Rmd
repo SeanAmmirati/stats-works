@@ -1,0 +1,169 @@
+---
+title: "GARCH_temperatures"
+author: "Sean Ammirati"
+date: "May 8, 2017"
+output: html_document
+---
+```{r}
+library(TSA)
+library(tseries)
+source('../ts_functions.R')
+```
+# Using a GARCH model in the case of heteroskedacity 
+```{r}
+temps<-ts(scan('../datasets/temps.txt'),frequency=12)
+head(temps)
+ts.plot(temps)
+hwm<-HoltWinters(temps)
+plot(hwm)
+expsmoothing<-HoltWinters(temps,beta=FALSE)
+plot(expsmoothing)
+expsmoothing
+```
+Here, I set two HoltWinter's models (one with a beta coefficient, and one without). It appears to perform quite well in fitting to the model, but the next section shows that the predictions for both of these models have quite large errors. 
+```{r}
+plot(hwm,predict(hwm,12,prediction.interval=TRUE))
+plot(expsmoothing,predict(expsmoothing,12,prediction.interval=TRUE))
+```
+Next, I look at the autocorrelations/partial autocorrelations of the dataset to see if an ARIMA model would be appropriate. 
+```{r}
+acf(temps)
+pacf(temps)
+eacf(temps)
+sub<-armasubsets(temps,nar=10,nma=10,ar.method='ols')
+plot(sub)
+```
+Here, it is not immediately clear what model would fit best. The acf does not go below the confidence band in any of the lags, and the pacf takes quite a long time to do so as well (after 5 lags, it still jumps above to confidence band more often than we'd expect). Considering the fact that the time series is highly unstationary, it makes sense to perform a differencing transformation. The results from the best.arima function give an ARIMA(1,1,2) model with seasonal components (2,1). 
+```{r}
+best.arima(temps, maxord = rep(2,6))
+temps_arima<-arima(temps,order=c(1,1,2),seasonal = list(order=c(2,0,1),frequency(temps)),method="CSS")
+temps_arima
+```
+I then fit the model and plot the ARIMA model below. 
+```{r}
+plot(temps_arima)
+temps_res<-residuals(temps_arima)
+plot(temps_res)
+```
+Looking at the residuals from the original time series, we can see that there is a decent amount of heteroskedasticity in the errors. In the first few years, we see a much higher variance, with higher peaks and lower troughs, then the next few, followed by quick variations and large outliers. At the end of the residual plot, we see that the variability seems to get lower. This means that we should use a GARCH model on the residuals, as our assumption of constant variance of the residuals does not appear to be met. 
+
+We can confirm this by looking at the ACF and PACF of transformations of the residuals that should preserve independence (squaring and absolute value). 
+
+Looking at the ACF and PACF of the squared and absolute residuals below, we see that there is clearly an issue with uneven variance throughout the time series, as they are autocorrelated under a transformation that should retain independence. The McLeod Li test also confirms this assumption, as we can reject the hypothesis that the squared residuals are uncorrelated, which is problematic under the assumptions of the ARIMA model.
+
+# Determining whether residuals are homoskedastic
+```{r}
+acf(temps_res)
+pacf(temps_res)
+```
+The ACF and PACF of the residuals look pretty good - there doesn't seem to be too much autocorrelations in the lags. However, we can see below that this does not hold when the residuals are squared, or when taking the absolute value. This indicates that we do not have a constant variance in the residuals as we had previously assumed in the seasonal ARIMA model. 
+```{r}
+acf(temps_res^2)
+pacf(temps_res^2)
+acf(abs(temps_res))
+pacf(abs(temps_res))
+eacf(temps_res^2)
+eacf(abs(temps_res))
+McLeod.Li.test(y=temps_res)
+```
+The t-test confirms that the mean of the residuals is not significantly non-zero. We also see that the EACF suggests an ARMA(1,1) model for the squared residuals. We now fit a GARCH(1,1) model to the residuals. 
+
+#Testing Fit of GARCH
+```{r}
+t.test(temps_res)
+garchm <- garch(temps_res,order=c(1,1))
+summary(garchm)
+garchm_res <- residuals(garchm)
+plot(garchm_res)
+plot(temps_res)
+```
+We can see that the residuals for the new GARCH model are much better behaved than earlier, with relatively constant variance throughout. This was the goal of perfoming the GARCH model on the residuals in the first place, so this is good news. 
+```{r}
+acf(garchm_res^2,na.action=na.omit)
+acf(abs(garchm_res),na.action=na.omit)
+pacf(garchm_res^2,na.action=na.omit)
+pacf(abs(garchm_res),na.action=na.omit)
+qqnorm(garchm_res)
+qqline(garchm_res)
+```
+From the above, we see that the residuals of the new GARCH(1,1) model that we have fitted on the residuals does not have autocorrelations in their own squared residuals. Also, there is no apparent heteroskedasticity in the errors, and the QQ-Plots look to be relatively close to normal. This indicates that the GARCH model was effective at dealing with the heteroskedacity problem from the ARIMA model. If we model the errors with the GARCH model, we can avoid some of the issues that having non-constant variance brought us in the original model. 
+
+# Creating a Confidence Interval
+Below, I simulate 1000 recursions to estimate errors 12 steps into the future (for each month of 2008.) I use this to produce 95% confidence intervals for the residuals. I then use a random set of these recursions to simulate residuals in 10 different hypothetical situations. I do this by adding the residuals found by the simulations of the GARCH model to the ARMA estimates, in order to 'guess' the actual residual that was produced. I use the unconditional variance as my initial estimate of the variance, and recurse to estimate the true variance, and therefore estimate the new residual.
+
+```{r}
+rep <- 1000
+residm <- NULL
+step <- 12
+
+tail(temps_res^2)
+
+sq.resid.lag1<-temps_res[length(temps_res)]^2
+sigma2.lag1<-(0.00031943/(1-.1132588-.8635671))
+garchm$coef[1]
+
+
+garchm$coef[1]
+
+for (j in 1:rep) {
+  residv <- NULL
+  for (i in 1:step){
+    sigma2 <- garchm$coef[1]+garchm$coef[2]*sigma2.lag1+garchm$coef[3]*sq.resid.lag1 
+    new_resid <- rnorm(1,mean=0,sd=sigma2^.5) 
+    residv <- c(residv,new_resid)
+    sigma2_lag1 <- sigma2
+    sq_resid_lag1 <- new_resid^2
+  }
+  residm <- cbind(residm,residv)
+}
+
+lowerbound<-apply(residm,1,function(x){quantile(x,c(.025,.975))})[1,]
+upperbound<-apply(residm,1,function(x){quantile(x,c(.025,.975))})[2,]
+
+lowerbound
+upperbound
+
+num<-round(runif(10,1,1000))
+pred<-matrix(0,nrow=10,ncol=12)
+
+lbsim<-vector()
+ubsim<-vector()
+
+lbsim<-predict(temps_arima,12)$pred+lowerbound
+ubsim<-predict(temps_arima,12)$pred+upperbound
+
+
+
+tempslb<-c(as.numeric(temps),lbsim)
+tempsub<-c(as.numeric(temps),ubsim)
+
+
+tempspred<-list()
+for(i in 1:10){
+  pred[i,]<-predict(temps_arima,12)$pred+residm[1:12,num[i]]
+  tempspred[[i]]<-c(as.numeric(temps),pred[i,])
+}
+pred
+plot.ts(tempspred[[1]][1000:1908])
+
+for(i in 2:10){
+  lines(tempspred[[i]][1000:1908],col=colors()[10*i])
+}
+  lines(tempslb[1000:1908],lty="dashed")
+  lines(tempsub[1000:1908],lty="dashed")
+  
+plot(temps_arima,n_ahead=12)
+
+plot.ts(tempspred[[1]][1800:1908])
+for(i in 2:10){
+  lines(tempspred[[i]][1800:1908],col=colors()[10*i])
+}
+  lines(tempslb[1800:1908],lty="dashed")
+  lines(tempsub[1800:1908],lty="dashed")
+```
+We can see that most of the simulations stay within the confidence band, with one jumping far outside of it. This makes sense, as there are 120 different points to predict, we would expect around 6 to be outside of this confidence region. We expect it to also 'jump back' into the confidence region, since the lags are now uncorrelated, and the high variation is due to only the single time point. 
+
+There is a good amount of variation in these estimates, since the estimates have a mean of the ARIMA estimates, and a variance of the GARCH estimates. This is a testament to how difficult it can be to try to predict an "exact" value so far ahead into the future.
+
+
+

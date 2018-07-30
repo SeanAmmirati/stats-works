@@ -1,0 +1,59 @@
+---
+title: "differencing_and_log_transform_arima"
+author: "Sean Ammirati"
+date: "July 29, 2018"
+output: html_document
+---
+
+```{r}
+library(TSA)
+```
+# Using differencing and log transforms for AirPassengers dataset
+```{r}
+airline<-AirPassengers
+plot(airline)
+plot(log(airline))
+```
+
+We can see that the original time series model was far from stationary, as there seemed to be an increasing trend in the seasonal components of the time series as the time increased. That is, it was not only dependent on the lags, and not only that, it seemed to increase at an increasing rate as time goes on. 
+
+Taking the log has reduced this effect signicantly -- while there is still an upward trend over time, this trend seems to be relatively constant (i.e., it is not increasing at an increasing rate. It now appears to be increasing at a relatively constant rate, which is desirable.)
+```{r}
+plot(diff(log(airline)))
+```
+
+We can now see that differencing takes away much of the linear trend upwards that was worrisome in the previous two plots. Now, it appears to be more random and relatively stationary. There still appears to be a seasonal component, as -- for instance, the december period seems to be consistently lower than other times of the year.
+```{r}
+plot(diff(diff((log(airline))),lag=12))
+```
+
+The final transformation, by differencing the seasonal components in the graphs and effectively removing the seasonal effects, has produced a time series which is most desirable -- one that is stationary and lacks any obvious seasonal components. 
+```{r}
+airlinetransf<-as.vector(diff(diff((log(airline))),lag=12))
+acf(airlinetransf)
+```
+
+Here, we can see that the ACF is relatively well behaved. There are a few points that lay outside of the confidence regions, (at lags 3 and 12), but for the most part it appears that an AR(1) model would be the most appropriate on this transformed dataset. 
+
+```{r}
+m2<-arima(log(airline),c(0,1,1),seasonal=list(order=c(0,1,1),period=12))
+tsdiag(m2)
+hist(m2$residuals)
+predict(m2,n.ahead=2,se.fit=TRUE)
+```
+
+Next, we look at some diagnostics for this time series. Everything appears to look quite good, as the residuals look relatively random (except for a thinning between 1956 and 1958-- a variation also seen in the time series itself), there are no statistically significant autocorrelations, and the p-values for the lags seem to be significant. This all suggests that this model is a relatively good fit to the data. 
+
+```{r}
+ts.plot(log(airline))
+plot(m2,n.ahead=2)
+```
+
+
+
+```{r}
+ts.plot(airline)
+plot(m2,n.ahead=2,transform=exp)
+```
+
+Here, we can see that the forcasts seem relatively reasonable for both the logged series and the original time series. The confidence intervals are surprisingly good for both series as well, suggesting that this particular transformation and seasonal ARIMA model were exceptionally good at forcasting this data. 
