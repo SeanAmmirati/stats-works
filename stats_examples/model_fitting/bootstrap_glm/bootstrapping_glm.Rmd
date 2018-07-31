@@ -1,0 +1,27 @@
+---
+title: "bootstrap_glm"
+author: "Sean Ammirati"
+date: "October 22, 2016"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Bootstrapping 
+```{r}
+library(ISLR)
+library(boot)
+attach(Default)
+head(Default)
+glm.fit <- glm(default~income+balance,family = "binomial",data = Default)
+summary(glm.fit)
+boot.fn <- function(data ,index) {
+ return(glm(default~income+balance ,family = "binomial",data = data ,subset = index)$coefficients)
+}
+
+boot.fn(Default,1:100)
+boot(Default ,boot.fn ,1000)
+summary(glm.fit)
+```
+As we can see above, the boot function found standard errors that were greater than the standard errors of the summary function. This makes sense, as the bootstrap method does not depend on estimates of the deviations of the error terms -- it simply samples observations repeatedly and creates models with them, and uses the difference between that and the full model to determine the standard error. So, as expected, the true standard error is likely larger than that given by the summary, since the summary is dependent on the type of model itself, while the bootstrap is not. 

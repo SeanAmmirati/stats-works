@@ -1,0 +1,191 @@
+---
+title: 'classification_problem_stocks'
+author: 'Sean Ammirati'
+subtitle: 'Investigating LDA, QDA, Logistic Regression and KNN on stock data.'
+date: 'October 11, 2016'
+output: html_document
+---
+
+```{r}
+library(ISLR)
+library(MASS)
+library(class)
+attach(Weekly)
+dim(Weekly)
+summary(Weekly)
+cor(Weekly[,-9])
+plot(Year,Volume)
+plot(Volume)
+```
+
+It appears that the Lag variables are only very slightly uncorrelated (with cor close to 0). Only Year and Volume seem to have a direct correlation. 
+Plotting Volume against Year confirms this, as there seems to be an upward trend.
+
+```{r}
+glm.fit <- glm(Direction ~ Lag1 + Lag2 + Lag3 + Lag4 + Lag5 + Volume, family = binomial,data = Weekly)
+summary(glm.fit)
+coef(glm.fit)
+summary(glm.fit)$coef
+```
+AS we can see from the summary of the coefficients, only Lag2 seems to be significant at the 5% level. 
+
+```{r}
+glm.probs <- predict(glm.fit,type = "response")
+glm.pred <- rep("Down",1089)
+glm.pred[glm.probs > .5] <- "Up"
+glm.pred
+confusionmatrix <- table(glm.pred,Direction)
+confusionmatrix
+mean(glm.pred == Direction)
+```
+
+The confusion matrix is telling us that, on average, the model correctly predicts the training data 56.107% of the time. 
+This means that the training error rate for the logistic regression is 44%. Of course, this is likely an underestimation since
+it is using the same data it was modeled with to predict. When the true direction is Up, the model is very accurate, with 92% of the 
+data being predicted accurately. However, when the true direction is down, the model doesn't fare well at all, with only 11% being 
+reported accurately. That is, it tends to make much more mistakes when the true direction is down than when it is up. 
+
+```{r}
+Boolean <- (Year < 2009)
+WeeklyTraining <- Weekly[Boolean,]
+WeeklyTest <- Weekly[!Boolean,]
+Direction_Training <- Direction[Boolean]
+Direction_Test <- Direction[!Boolean]
+glm.fit2 <- glm(Direction ~ Lag2,family = binomial,data = Weekly,subset = Boolean)
+summary(glm.fit2)
+glm.probs2 <- predict(glm.fit2,WeeklyTest,type = "response")
+glm.pred2 <- rep("Down",104)
+glm.pred2[glm.probs2 >= .5] <- "Up"
+table(glm.pred2,Direction_Test)
+mean(glm.pred2 == Direction_Test)
+
+library(MASS)
+lda.fit <- lda(Direction~Lag2,data = Weekly,subset = Boolean)
+lda.fit
+plot(lda.fit)
+lda.predict <- predict(lda.fit,WeeklyTest,type = "response")
+names(lda.predict)
+lda.class <- lda.predict$class
+table(lda.class,Direction_Test)
+mean(lda.class == Direction_Test)
+
+qda.fit <- qda(Direction ~ Lag2,data = Weekly,subset = Boolean)
+qda.predict <- predict(qda.fit,WeeklyTest)$class
+table(qda.predict,Direction_Test)
+mean(qda.predict == Direction_Test)
+```
+The qda predicts all ups! 
+```{r}
+train <- as.matrix(Lag2[Boolean])
+test <- as.matrix(Lag2[!Boolean])
+knn.predict <- knn(train,test,Direction_Training,1)
+table(knn.predict,Direction_Test)
+mean(knn.predict == Direction_Test)
+```
+# Logistic Regression Prediction
+```{r}
+table(glm.pred2,Direction_Test)
+mean(glm.pred2 == Direction_Test)
+```
+# Linear Discriminant Prediction
+```{r}
+table(lda.class,Direction_Test)
+mean(lda.class == Direction_Test)
+```
+# Quadratic Discriminant Prediction
+```{r}
+table(qda.predict,Direction_Test)
+mean(qda.predict == Direction_Test)
+```
+# K-Nearest Neighbors Prediction
+```{r}
+table(knn.predict,Direction_Test)
+mean(knn.predict == Direction_Test)
+```
+It appears that either the logistic regression or the LDA method is the most accurate, with both of their mean values with the test data being .625.
+This is fairly good -- it means that using the models, we can correctly guess whether the direction will go up or down with more than
+a 50-50 chance. A 100-62.5=37.5% error rate is not bad at all when considering stock data. Would I bet for it? I would need more data to
+really say, but if this were the case with any test data set, using the model could clearly be very profitable. If only things were so simple!
+
+```{r}
+summary(glm.fit)
+```
+Since Lag1 was the runner-up in this case for significance, let's do a model containing both Lag1 and Lag2. 
+
+```{r}
+glm.fit3 <- glm(Direction ~ Lag1 + Lag2,family = binomial,data = Weekly,subset = Boolean)
+summary(glm.fit3)
+glm.probs3 <- predict(glm.fit3,WeeklyTest,type = "response")
+glm.predict <- rep("Down",104)
+glm.predict[glm.probs3 > .5] <- "Up"
+table(glm.predict,Direction_Test)
+mean(glm.predict == Direction_Test)
+```
+
+This is still not as accurate as the model with just Lag2 in it. 
+
+Let's try the K-Nearest Neighbors with K=5
+```{r}
+knn.predict2 <- knn(train,test,Direction_Training,5)
+table(knn.predict2,Direction_Test)
+mean(knn.predict2 == Direction_Test)
+mean(knn.predict == Direction_Test)
+```
+
+So, it appears it was more accurate than with only 1 neighbor. Let's try with k=21
+```{r}
+knn.predict3 <- knn(train,test,Direction_Training,21)
+mean(knn.predict3 == Direction_Test)
+```
+
+Looks like this is getting us somewhere. With k=21, the failure rate seems to be going down significantly. Let's try 
+once more with K=41
+```{r}
+knn.predict4 <- knn(train,test,Direction_Training,41)
+mean(knn.predict4 == Direction_Test)
+```
+
+So much for that. Regardless, neither of the KNN tests are better than the LDA or Logistic Regression results. 
+
+Let's try using different prior probabilities. Let's say we really want our model to be accurate when the true direction is
+down, not up. That is, we want to be more conservative. Let's say the probability of it being down is, .75. So...
+```{r}
+lda.fit2 <- lda(Direction ~ Lag2,data = Weekly,subset = Boolean,prior = c(.75,.25))
+lda.predict2 <- predict(lda.fit2,WeeklyTest,type = "response")
+table(lda.predict2$class,Direction_Test)
+```
+
+Clearly that prior was too high! We predict all downs. Let's try with 52%.
+```{r}
+lda.fit3 <- lda(Direction ~ Lag2,data = Weekly,subset = Boolean,prior = c(.52,.48))
+lda.predict3 <- predict(lda.fit3,WeeklyTest,type = "response")
+table(lda.predict3$class,Direction_Test)
+mean(lda.predict3$class == Direction_Test)
+```
+
+So, now our prediction rate is lower than .5, which is not very good. But at least in this case, when the true direction is down, we are more accurate at 
+estimating it. While, now, when it is up, we are less accurate. 
+
+Finally, I will try a glm model with interaction terms. 
+```{r}
+glm.fit4 <- glm(Direction ~ Volume + Lag2 + Volume*Lag2,data = Weekly,subset = Boolean,family = binomial)
+summary(glm.fit4)
+glm.probs4 <- predict(glm.fit4,WeeklyTest,type = "response")
+glm.predict4 <- rep("Down",104)
+glm.predict4[glm.probs4 >= .5] <- "Up"
+table(glm.predict4,Direction_Test)
+mean(glm.predict4 == Direction_Test)
+```
+
+So, it seems that the results of the glm regression were the most accurate -- Lag2 is truly the only significant factor
+as determined by the training data. Even though Volume had a tren, it doesn't seem to have had much of an effect. Since it was 
+quadratic, however...
+```{r}
+qda.fit2 <- qda(Direction ~ Lag2 + Volume + Volume^2,data = Weekly,subset = Boolean)
+qda.predict2 <- predict(qda.fit2,WeeklyTest)$class
+table(qda.predict2,Direction_Test)
+mean(qda.predict2 == Direction_Test)
+```
+
+No. It was a long shot, but it doesn't seem that the underlying distribution of the Volume really meant that using QDA would magically
+make it significant. 
