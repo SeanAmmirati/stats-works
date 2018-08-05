@@ -1,0 +1,138 @@
+---
+title: "BMI_HLM_baseline"
+author: "Sean Ammirati"
+date: "March 4, 2017"
+output: html_document
+---
+
+
+
+My methodology for this is as follows: 
+  
+I created functions which would return the coefficients and variation of the fixed effects, the variation and standard error of the random effects, and the ICC. I then defined the models individually and used these functions to extract this information from the summary function. However, I was unable to create this into a nice table using R, so I simply pasted the results into Excel (included in Word Document). 
+I then created the Standard BMI variable by subtracting the baseline from the BMI and using this as my dependent variable for the fourth and fifth models.  I then created the same models on the modified dataset, removing the first values of each. The final result of modelinfo (the function I created) contains all of the data in the tables above. It finds the results for all tables.  
+
+I found the predictions for the Y1j for each j and compared them to the baseline BMI. They were not identical, which aligns with my views on the issues with using the zj variable in this way. This was not rectified by model 4 or 5 either, as it did not predict 0 for all of the Y1j. 
+
+To compare the first five models with the final five, I calculated the sum squared error of each in relation to one another. Every corresponding model with the smaller dataset performed better than the model including the baseline, which was expected. 
+
+Finally, I created residual plots for each of the models I created. 
+```{r}
+library(lme4)
+
+count<-c(1:20)
+ID<-c(rep(1,4),rep(2,4),rep(3,4),rep(4,4),rep(5,4))
+time<-c(rep(c(0,1,2,4),5))
+baseline<-c(rep(20,4),rep(25,4),rep(26,4),rep(21,4),rep(23,4))
+BMI<-c(20,21,22,24,25,28,27,28,26,24,25,28,21,26,24,25,23,28,27,28)
+
+data.bmi<-data.frame(ID,time,baseline,BMI)
+
+findcoefficients<-function(model){
+  ncoef<-nrow(as.data.frame(summary(model)$coefficients)[1])
+  summary(model)$coefficients[1:ncoef,1:2]
+}
+
+findrandomcomp<-function(model){
+  nran<-nrow(as.data.frame(VarCorr(mod1)))
+  m<-as.data.frame(VarCorr(model));m[1,1]<-m[1,2]
+  m[1:nran,c(1,4:5)]
+}
+
+mod1<-lmer(BMI~1+time+baseline+(1|ID),data=data.bmi)
+mod2<-lmer(BMI~time+baseline-1+(1|ID),data=data.bmi)
+mod3<-lmer(BMI~time+(1|ID),data=data.bmi)
+
+StandardBMI<-BMI-baseline
+StandardBMI
+mod4<-lmer(StandardBMI~time+(1|ID),data=data.bmi)
+summary(mod4)
+
+mod5<-lmer(StandardBMI~time-1+(1|ID),data=data.bmi)
+summary(mod5)
+
+modellist<-list(mod1,mod2,mod3,mod4,mod5)
+fixedeffect<-list()
+randomeffect<-list()
+ICC<-list()
+modelinfo<-list()
+
+for(i in 1:5){
+  fixedeffect[[i]]<-findcoefficients(modellist[[i]])
+  randomeffect[[i]]<-findrandomcomp(modellist[[i]])
+  ICC[[i]]<-(randomeffect[[i]][1,2])/(randomeffect[[i]][1,2]+randomeffect[[i]][2,2])
+  modelinfo[[i]]<-list(fixedeffect[[i]],randomeffect[[i]],ICC[[i]])
+}
+modelinfo[[1]];modelinfo[[2]];modelinfo[[3]]
+
+count2<-c(1:15)
+ID2<-c(rep(1,3),rep(2,3),rep(3,3),rep(4,3),rep(5,3))
+time2<-c(rep(c(1,2,4),5))
+baseline2<-c(rep(20,3),rep(25,3),rep(26,3),rep(21,3),rep(23,3))
+BMI2<-c(21,22,24,28,27,28,24,25,28,26,24,25,28,27,28)
+data.bmi2<-data.frame(ID2,time2,baseline2,BMI2)
+
+modnobase1<-lmer(BMI2~1+time2+baseline2+(1|ID2),data=data.bmi2)
+modnobase2<-lmer(BMI2~time2+baseline2-1+(1|ID2),data=data.bmi2)
+modnobase3<-lmer(BMI2~time2+(1|ID2),data=data.bmi2)
+
+
+
+StandardBMI2<-BMI2-baseline2
+StandardBMI2
+
+modnobase4<-lmer(StandardBMI2~time2+(1|ID2),data=data.bmi2)
+summary(modnobase4)
+
+modnobase5<-lmer(StandardBMI2~time2-1+(1|ID2),data=data.bmi2)
+summary(modnobase5)
+
+modellist2<-list(modnobase1,modnobase2,modnobase3,modnobase4,modnobase5)
+
+for(i in 6:10){
+  fixedeffect[[i]]<-findcoefficients(modellist2[[i-5]])
+  randomeffect[[i]]<-findrandomcomp(modellist2[[i-5]])
+  ICC[[i]]<-(randomeffect[[i]][1,2])/(randomeffect[[i]][1,2]+randomeffect[[i]][2,2])
+  modelinfo[[i]]<-list(fixedeffect[[i]],randomeffect[[i]],ICC[[i]])
+}
+
+modelinfo
+
+data.bmi
+
+predict(mod1)[c(1,5,9,13,17)]
+baseline[c(1,5,10,15,20)]
+predict(mod3)[c(1,5,9,13,17)]
+baseline[c(1,5,10,15,20)]
+sum((predict(mod1)-BMI)^2)
+sum((predict(modnobase1)-BMI2)^2)
+sum((predict(mod2)-BMI)^2)
+sum((predict(modnobase2)-BMI2)^2)
+sum((predict(mod3)-BMI)^2)
+sum((predict(modnobase3)-BMI2)^2)
+sum((predict(mod4)-BMI)^2)
+sum((predict(modnobase4)-BMI2)^2)
+sum((predict(mod5)-BMI)^2)
+
+sum((predict(modnobase5)-BMI2)^2)
+
+plot(residuals(mod1))
+
+plot(residuals(mod2))
+
+plot(residuals(mod3))
+
+plot(residuals(mod4))
+
+plot(residuals(mod5))
+
+plot(residuals(modnobase1))
+
+plot(residuals(modnobase2))
+
+plot(residuals(modnobase3))
+
+plot(residuals(modnobase4))
+
+plot(residuals(modnobase5))
+```

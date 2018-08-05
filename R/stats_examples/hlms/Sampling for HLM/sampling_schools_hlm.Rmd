@@ -1,0 +1,162 @@
+---
+title: "Sampling Using HLMS"
+author: "Sean Ammirati"
+date: "April 4, 2017"
+output: html_document
+---
+Importing the data -- fitting a random intercept model
+```{r}
+data <- read.csv("./schools_ds.csv")
+head(data)
+require(lme4)
+mod1 <- lmer(score~1+(1|grpID),data=data)
+summary(mod1)
+```
+I will be investigating the effect of sampling schema on the effectiveness of HLMS by looking at school data. Each school has a different number of students, and we wish to fit a random intercept model
+based on the school. 
+
+I first create some functions that will be useful for me in creating the samples. The first creates a sample from a group of n elements. The second transfers a list into a data frame. I then create the samples by first randomly selecting 11 from each group, then selecting i*2 from each group (so 2 from group 1, 4 from group 2, etc.). 
+
+#functions
+```{r}
+samplefromgroup <- function(grp,n){
+  j= sample(1:length(data[data$grpID==grp,1]),n)
+  return(data[data$grpID==grp,][j,])
+}
+
+lt2df <- function(l){
+  return(as.data.frame(do.call(rbind.data.frame,l)))
+}
+```
+#Sampling equally from each school
+```{r}
+simresults<-list()
+  for (sim in 1:10^3) {
+    sample1 <- list()
+    nschool <- length(unique(data$grpID))
+    
+    for(i in 1:nschool){
+      sample1[[i]] <- samplefromgroup(i,11)
+    }
+    
+    sample1 <- lt2df(sample1)
+    sample1
+    
+    sample2 <- list()
+    for(i in 1:nschool){
+      sample2[[i]] <- samplefromgroup(i,2*i)
+    }
+    sample2 <- lt2df(sample2)
+    sample2
+    
+    sample3 <- list()
+    randomschool <- sample(1:nschool,5)
+    trigger <- any(randomschool==1)
+    
+    
+    if(trigger){
+      remaining <- !randomschool==1
+      remsch <- randomschool[remaining]
+      randomselect23 <- sample(remsch,2)
+      schoolselect22 <- remsch[remsch!=randomselect23[1]&remsch!=randomselect23[2]]
+    
+      
+      sample3[[1]] <- data[data$grpID==1,]
+    
+      for(i in 1:2){
+        sample3[[i+1]] <- samplefromgroup(randomselect23[i],23)
+        sample3[[i+3]] <- samplefromgroup(schoolselect22[i],22)
+      }
+    } else{
+        for(i in 1:length(randomschool)){
+          sample3[[i]] <- samplefromgroup(randomschool[i],22)
+        }
+    }
+    
+    sample3 <- lt2df(sample3)
+    sample3
+    
+    sample4 <- list()
+    
+    weights <- vector()
+    for(i in 1:nschool){
+      weights[i] <- length(data[data$grpID==i,1])/nrow(data)
+    }
+    
+    randomschool2 <- sample(1:nschool,5,prob=weights)
+    trigger2 <- any(randomschool2==1)
+    
+    
+    if(trigger2){
+      remaining2 <- !randomschool2==1
+      remsch2 <- randomschool2[remaining2]
+      randomselect232 <- sample(remsch2,2)
+      schoolselect222 <- remsch2[remsch2!=randomselect232[1]&remsch2!=randomselect232[2]]
+      
+      
+      sample4[[1]] <- data[data$grpID==1,]
+      for(i in 1:2){
+    
+        sample4[[i+1]] <- samplefromgroup(randomselect232[i],23)
+        sample4[[i+3]] <- samplefromgroup(schoolselect222[i],22)
+      }
+      
+    } else{
+      for(i in 1:length(randomschool)){
+        sample4[[i]] <- samplefromgroup(randomschool2[i],22)
+      }
+    }
+    
+    sample4 <- as.data.frame(do.call(rbind.data.frame,sample4))
+    sample4   
+  
+    
+    listofsamples <- list(sample1,sample2,sample3,sample4)
+    parameters <- matrix(nrow=3,ncol=4)
+    rownames(parameters) <- c("Gamma00","Sigma","Tao0")
+    colnames(parameters) <- c("Model 1","Model 2","Model 3","Model 4")
+
+    models <- list()
+    for(i in 1:length(listofsamples)){
+      models[[i]] <- lmer(score~1+(1|grpID),data=listofsamples[[i]])
+      parameters[1,i] <- summary(models[[i]])$coef[1]
+      parameters[2,i] <- summary(models[[i]])$sigma
+      parameters[3,i] <- as.data.frame(VarCorr(models[[i]]))[1,5]
+    }  
+    simresults[[sim]] <- parameters
+}
+
+fullmodelparameters <- matrix(rep(c(summary(mod1)$coef[1],summary(mod1)$sigma,as.data.frame(VarCorr(mod1))[1,5]),4),nrow=3)
+
+simresults[[1]] - fullmodelparameters
+```
+
+I then create a list of samples, and use each of these samples to sample using the models. I create a matrix that will store the parameters in parameters, and it stores the fixed effect (gamma00) and the variances of the random effects (sigma and tao) for each model, using each sample. It then stores this information for each simulation, which is done 10^5 times. This means the samples are created differently each time, and then the model is fit using each sample, and the information is stored in a list for each simulation. I then compare this to the model using the full population, which are the full model parameters. As an example, we can see the bias from the first simulation of each model, for each variable. 
+
+I then compute the mean bias, mean squared error, and mean variance for each of the samples. I do this by summing all of the individual biases, squared errors, and variances, and dividing by the total number of simulations. 
+
+```{r}
+indbias <- lapply(simresults,function(x) x - fullmodelparameters)
+indsquarederror <- lapply(simresults,function(x) (x - fullmodelparameters)^2)
+mean <- Reduce('+',simresults)/10^5
+indvariance <- lapply(simresults, function(x) (x - mean)^2)
+
+mse <- Reduce('+',indsquarederror)/10^5
+variance <- Reduce('+',indvariance)/10^5
+fullbias <- Reduce('+',indbias)/10^5
+
+mse
+variance
+fullbias
+```
+The components of the MSE can be decomposed into the variance and the bias (MSE = bias^2 + variance). 
+
+This discussion is especially important to application because it is often expensive or impossible to gather data from the entire population (thus why we sample in the first place), and in the same vein, it may be expensive or difficult to gather data from all of the subsequent groups. Sampling the schools may be seen as desirable in this instance, as it will likely require less resources to acquire information from 5 groups rather than 10. However, we can see from the above that the effects of this on the models are somewhat large, and sampling from the number of schools does not produce the same results as sampling from each school directly. 
+
+While it may not be immediately obvious from this problem, if you were to try to sample from, say, 100,000 schools, 1,000 students in each school, this could become extremely expensive and difficult to do. Thus the importance of the results here cannot be stressed enough - it is not equivalent to randomly sample 5 (or any number) groups and select a comparable number of students. Due to the structure of the HLMs, a great deal of information is lost if we neglect to look at all of the groups. 
+
+This is reflected in the results above. Models 3 and 4 show considerably worse results than the first two models. This suggest that sampling from the number of schools, which may be less expensive, is less accurate at predicting the true model underlying the data. That is, using more groups will produce more favorable results in the application of HLM, even though the number of students is exactly the same in all cases. 
+
+We see that the estimates of sigma are more accurate in terms of mse. This makes sense, as we can more accurately account for the individual differences, as there are less groups. However, this is a consequence of the sampling - and therefore, the Tao0 estimates are much, much worse for the later two models. Since we have constructed the HLM's to account for variations within groups, and we are often interested in the level 2 variations as well, gaining a small amount of accuracy in sigma for a large drop in accuracy of tao0 is unfavorable. If we were that much more concerned with estimating sigma than Tao, we wouldn't be using a HLM in the first place. We also see a larger difference in the estimates for Gamma0 for the later two models. 
+
+The other structure that is included here involves weighting the models by the number of students in each school. Thus Model 2 and Model 4 weigh the results by the number of students, while Model 1 and Model 3 treat them all as if they are equivalent. We see that using the weighing strategy produces worse results for the fixed coefficients, but in general is better for the random coefficients. This makes sense, since this weighing is based on the groups themselves, which will introduce more bias and variance in the fixed coefficients for the intercept. However, there is a trade off here, as the mse for both sigma and Tao0 decreases, which suggests that the random components of the models are closer to the true random parameters. The weighed models produce more variance in estimating sigma, but less bias, and produce better results for both for tao0. This makes sense, as weighing the groups will produce less biased estimates for the individual random effect, but produce a higher variance as these results have different amounts of students sampled. Tao0 will be more accurate in terms of both variance and bias, as we are accounting for the differences in the groups, which is reflected in the full model in a similar way. 

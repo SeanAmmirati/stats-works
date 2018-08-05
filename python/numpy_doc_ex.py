@@ -5,7 +5,7 @@ Created on Wed Aug  1 21:24:57 2018
 Various simple function to show documentation strategy.
 """
 
-__all__ = ['find_third_value']
+__all__ = ['find_third_value', 'names']
 
 import os 
 

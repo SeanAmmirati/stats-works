@@ -2,7 +2,7 @@
 title: "bootstrap_glm"
 author: "Sean Ammirati"
 date: "October 22, 2016"
-output: word_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}

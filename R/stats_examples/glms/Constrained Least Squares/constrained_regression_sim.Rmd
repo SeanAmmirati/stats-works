@@ -1,0 +1,38 @@
+---
+title: "Constrained Least Squares Simulation"
+output:
+  html_document: default
+---
+Constrained Least Squares: 
+```{r}
+const <- vector()
+unconst <- vector()
+correl <- vector()
+
+
+
+for (j in 1:100) {
+  for (i in 1:1000) {
+    y <- rnorm(100)
+    x1 <- y + rnorm(100,0,.2)
+    x2 <- rnorm(100,0,.01) - .3*y
+    
+    Xmat <- matrix(c(rep(1,length(x1)),x1,x2),ncol = 3)
+    data2 <- data.frame(y,x1,x2)
+    mod.sim.1 <- lm(y~x1+x2,data = data2)
+    constraint <- matrix(1,nrow = nrow(data2),ncol = 1)
+    d = 1 
+    M = matrix(rep(1,3),ncol = 1)
+    mod.sim.1
+    BetaUnconstr <- summary(mod.sim.1)$coef[,1]
+    b <- d - t(M) %*% BetaUnconstr
+    a <- t(Xmat) %*% Xmat
+    c <- solve(t(M) %*% solve(a) %*% M)
+    const[i]  <-  b*c*b
+    unconst[i]  <-  sum(resid(mod.sim.1)^2)
+    }
+  correl[j]  <-  cor(const,unconst)
+  }
+correl
+mean(correl)
+```

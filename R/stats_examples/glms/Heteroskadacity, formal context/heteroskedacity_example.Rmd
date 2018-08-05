@@ -1,0 +1,32 @@
+---
+title: "Heteroskedacity Example"
+author: "Sean Ammirati"
+date: "August 4, 2018"
+output: html_document
+---
+
+```{r}
+y <- c(41,53,97)
+X <- matrix(c(1,0,1,0,1,1),nrow = 3)
+alphahat <- solve(t(X) %*% X) %*% t(X)
+alphahat %*% y
+```
+This calculates the predictions in the first case.
+```{r}
+k <- 1.25
+ystar <- y
+ystar[3] <- y[3]/k
+xstar <- matrix(c(1,0,1/k,0,1,1/k),nrow = 3)
+alphahat <- solve(t(xstar) %*% xstar) %*% t(xstar)
+alphahat %*% ystar
+```
+This calculates the predictions in the second case
+
+Using the functions we get the same results: 
+```{r}
+source('./ols_functions.R')
+ols_preds(X,y)
+W <- diag(c(rep(1,2), 1/k^2))
+weighted_ols_preds(X, y, W)
+
+```

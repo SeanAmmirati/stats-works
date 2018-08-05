@@ -1,0 +1,86 @@
+---
+title: "ANOVA: Robust to Nonnormality"
+author: "Sean Ammirati"
+date: "Februrary 26, 2017"
+output: html_document
+---
+
+I will be comparing simulated exponential and beta distributed variables to results of the F distribution of ANOVA to determine how inaccurate ANOVA is when used on variables that are independent and identically distributed to a non-Normal distribution.
+
+```{r}
+source('./ANOVA_functions.R')
+```
+The following code creates 10^5 sets of 4 groups of 3, finds the F statistic associated with each and stores it in an R object. So exemp1 has the empirical F statistics for 10^5 such sets using an exponential distribution, and bemp has the empirical F statistics for 10^5 sets using a beta distribution. 
+```{r}
+
+expemp1<-numeric(10^5)
+
+
+for(l in 1:10^5){
+  a<-rexp(12,1)
+  f<-(sst(a,3,4)/3)/(sse(a,3,4)/8)
+  expemp1[l]<-f
+}
+
+expemp2<-numeric(10^5)
+
+for(l in 1:10^5){
+  a<-rexp(120,1)
+  f<-(sst(a,30,4)/3)/(sse(a,30,4)/116)
+  expemp2[l]<-f
+}
+
+bemp1<-numeric(10^5)
+
+for(l in 1:10^5){
+  a<-rbeta(12,5,2)
+  f<-(sst(a,3,4)/3)/(sse(a,3,4)/8)
+  bemp1[l]<-f
+}
+
+bemp2<-numeric(10^5)
+
+for(l in 1:10^5){
+  a<-rbeta(120,5,2)
+  f<-(sst(a,30,4)/3)/(sse(a,30,4)/116)
+  bemp2[l]<-f
+}
+
+```
+This has created all of the F statistics I need to determine (using exponential with 4 groups of 3, exponential with 4 groups of 30, beta(5,2) with 4 groups of 3, and beta(5,2) with 4groups of 30). Below I create a table_F to compare them with the true mean of the F distribution (df2/df2-2) and the quantiles (the median and 95th quantile.) 
+```{r}
+f1mean<-9/7
+f2mean<-116/114
+
+table_F<-matrix(c(f1mean,
+                mean(expemp1),
+                mean(bemp1),f2mean,
+              mean(expemp2),
+              mean(bemp2),qf(.5,3,9),
+              median(expemp1),
+              median(bemp1),qf(.5,3,116),
+              median(expemp2),
+              median(bemp2),qf(.95,3,9),
+              quantile(expemp1,.95),
+              quantile(bemp1,.95),
+              qf(.95,3,116),
+              quantile(expemp2,.95),
+              quantile(bemp2,.95)),6)
+
+colnames(table_F)<-c("Mean","Median","95th Percentile")
+rownames(table_F)<-c("F,3,9","Empirical Exp,3,4","Empirical Beta,3,4","F,3,116","Empirical Exp,30,4","Empirical Beta,30,4")
+table_F
+```
+# Discussion 
+
+We can see that, for the mean, the true F distribution has a lower mean than the empirical beta and exponential using 4 groups of 3. This suggests that if we were to use ANOVA with data with an exponential or beta distribution, the mean would be underestimated. That is, the true mean would be higher than that given by the F-distribution. 
+
+ 	For the median, the true F distribution again would underestimate the empirical results from the beta and exponential distributions. This implies that if we were to use ANOVA and found a P-value of .5 using the F-distribution, the true p-value would be lower than this. So our estimations would be skewed in favor of not rejecting the null hypothesis if we were to set the significance to .5. 
+
+The 95th percentile is perhaps the most interesting case, where we can see some difference between the two empirical distributions. In the case of the exponential distribution, we can see that the empirical exponential F statistic produced lower 95th quantiles than the true F distribution. Suppose we were to run ANOVA on data that was exponentially distributed and got an F statistic of 3.8. Using the true F distribution, we would conclude that we cannot reject the null hypothesis that the two groups behave the same with 95% confidence. However, the true exponential distribution would have a 95th percentile of 3.72, meaning we would reject the null hypothesis that the groups are the same. It results in a type II error - we fail to reject the null hypothesis when it is false. 
+
+The reverse is true for the beta distribution. Let's say we run ANOVA with data coming from an underlying beta(5,2) distribution and we get an F statistic of 4. The true F distribution would suggest that we reject the null that the groups are the same with 95% confidence - however, the empirical F using beta has a 95th percentile of 4.12, leading us to a Type I error, we have rejected the null hypothesis when it is true. 
+
+When we increase the value of n, we see that the discrepancies between the true F distribution and the empirical distributions shrink. This makes sense intuitively; due to the central limit theorem, we would expect this to occur as we increase the number in each group. There are still some discrepancies, but the difference is not very large and would likely not give very different results except at the margin (when it is exactly one of the values of the other distributions). 
+Interestingly, the beta distribution produces a lower F empirical than the true distribution for the 95th percentile and the median in this case. This seems preferable, because it means that Type I error (a false positive) is no more likely (in fact, less likely) using the true F distribution, as it is in fact more conservative than the actual distributions. So if we have a large sample size (n=120), and we are able to reject the null hypothesis, knowing only that the original distribution of each data point was either exponential, beta(5,2) or normally distributed (as is the normal case in ANOVA), we can be confident that our conclusion is correct regardless of which distribution it originally followed. It is in this sense that the original assumption of normality for ANOVA is perhaps not so important - compared to the independent and identically distributed assumption which has a larger effect if it is not satisfied. 
+
