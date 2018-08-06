@@ -1,5 +1,5 @@
 ---
-title: 'classification_problem_stocks'
+title: 'Classification Problem -- Stocks'
 author: 'Sean Ammirati'
 subtitle: 'Investigating LDA, QDA, Logistic Regression and KNN on stock data.'
 date: 'October 11, 2016'

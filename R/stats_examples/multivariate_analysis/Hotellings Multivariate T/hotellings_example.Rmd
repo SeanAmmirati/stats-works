@@ -1,0 +1,35 @@
+---
+title: "Hotelling's T-Test Example"
+author: "Sean Ammirati"
+date: "August 5, 2018"
+output: html_document
+---
+
+Here's an example of the Hotelling's MV T-test with responses and hypothesized means. 
+```{r}
+source('./hotellings_functions.R')
+response_data <- matrix(c(51,27,37,42,27,43,41,38,36,26,29,36,20,22,36,18,32,22,21,23,31,20,50,26,41,32,33,43,36,31,27,31,25,35,17,37,34,14,35,25,20,25,32,26,42,27,30,27,29,40,38,16,28,36,25),ncol = 5)
+hypothesized_mean <- c(30,25,40,25,30)
+response_data
+
+prob_null(response_data, hypothesized_mean)
+find_discriminant(response_data, hypothesized_mean)
+```
+
+From this, because the p value is less than .05, we reject the hypothesis that this data comes from a normally distributed population with mean vector 30, 25, 40, 25, 30.
+The discriminant indicates that the third variable contributes most to the difference between the hypothesized and sample mean. 
+```{r}
+require(MASS)
+ex <- mvrnorm(11, mu = hypothesized_mean, Sigma = cov(response_data))
+prob_null(ex, hypothesized_mean)
+find_discriminant(ex, hypothesized_mean)
+```
+Now we see that a multivariate normal distribution sampled with mean equal to the hypothesized mean and Sigma equal to the covariance of the observed data provides unsignificant results -- as expected.
+
+Now, let's see the t-test for the equality of means, assuming an equal covariance matrix and sample sizes.  
+```{r}
+differences <- response_data - ex
+prob_null(differences, rep(0,5))
+find_discriminant(differences, rep(0,5))
+```
+We see the expected result:  that the two samples produce significant results -- meaning that there is evidence to reject the null hypothesis that they come from a distribution with the same mean vector. 

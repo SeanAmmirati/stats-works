@@ -1,5 +1,5 @@
 ---
-title: "marathon_glm"
+title: "GLM: Marathon Dataset"
 author: "Sean Ammirati"
 date: "August 5, 2018"
 output: html_document
@@ -8,33 +8,33 @@ output: html_document
 Here I consider the marathon runners listed in the https://en.wikipedia.org/wiki/List_of_world_records_in_masters_athletics wikipedia page.
 
 ```{r}
-timesm<-c(123.98,128.633,134.266,139.484,139.533,156.5,161.95,174.8,184.9,195.9,236.567,340.017,505.283)
-timesf<-c(139.316,144.893,149.00,151.083,170.55,181.5,192.95,215.483,233.7,252.733,314.433,533.133)
-agem<-c(35,40,45,50,55,60,65,70,75,80,85,90,100)
-agef<-c(35,40,45,50,55,60,65,70,75,80,85,90)
+timesm <- c(123.98,128.633,134.266,139.484,139.533,156.5,161.95,174.8,184.9,195.9,236.567,340.017,505.283)
+timesf <- c(139.316,144.893,149.00,151.083,170.55,181.5,192.95,215.483,233.7,252.733,314.433,533.133)
+agem <- c(35,40,45,50,55,60,65,70,75,80,85,90,100)
+agef <- c(35,40,45,50,55,60,65,70,75,80,85,90)
 
-agemsq<-agem^2
+agemsq <- agem^2
 
-time<-c(timesf,timesm)
-age<-c(agef,agem)
-gender<-c(rep(1,12),rep(0,13))
+time <- c(timesf,timesm)
+age <- c(agef,agem)
+gender <- c(rep(1,12),rep(0,13))
 
-marathon<-data.frame(time,age,gender)
+marathon <- data.frame(time,age,gender)
 head(marathon)
 ```
 First, I defined the variables. I found the times (in seconds) and recorded these for both males and females. I contained all of the data in a single dataset.
 
 # Linear Regression (Normal response)
 ```{r}
-lin1<-lm(timesm~agem,data=marathon)
-lin2<-lm(timesm~agem+agemsq,data=marathon)
+lin1 <- lm(timesm~agem,data=marathon)
+lin2 <- lm(timesm~agem+agemsq,data=marathon)
 summary(lin1)
 
 summary(lin2)
 ```
 Based on the summary, it appears that the quadratic term is quite important, it increases the R-squared significantly. So there does appear to be a quadratic effect of age on the time (or at the very least, a non-linear one).
 ```{r}
-lin3<-lm(time~age+gender)
+lin3 <- lm(time~age+gender)
 summary(lin3)
 ```
 Here, the model shows that gender has some part in determining the time (in seconds) of completion, but it is not significant. If the coefficient is correct, it means that, holding age constant, a man will have 35.0534 faster time (or a woman will take 35.0534 additional seconds) to finish the race. 
@@ -43,15 +43,14 @@ Comparing the intercepts in the models shows a pretty large difference in the pr
 
 # Using a gamma distribution on response
 ```{r}
-gammalin1<-glm(timesm~agem,family="Gamma")
+gammalin1 <- glm(timesm~agem,family="Gamma")
 summary(gammalin1)
 ```
-The link function here is the canonical link function for the Gamma distribution, which is the inverse (1/µ). All variables come up as significant. 
+The link function here is the canonical link function for the Gamma distribution, which is the inverse (1/$\mu$). All variables come up as significant. 
 
 
 The model can be written as follows 
-	Y=XB+?? where Y follows a Gamma distribution with link function g(E(Y)) = 1/µ
-
+	Y=XB+$\epsilon$  where Y follows a Gamma distribution with link function g(E(Y)) = 1/$\mu$ 
 # Inverse-Gaussian distribution
 
 The exponential family has the following form:
@@ -59,29 +58,29 @@ The exponential family has the following form:
 \[f(y,\theta ,\phi ) = e^{\frac{y \theta - b(\theta )}{a(\phi )} + c(y, \phi)}\]
  
 The inverse-Gaussian distribution is defined as:
-\[f(y) = \sqrt{\frac{\lambda}{2\pi y^3}} \exp (-\frac{\lambda (y - \mu )^2)}{2\mu ^2y})\]
+\[f(y) = \sqrt{\frac{\lambda}{2\pi y^3}} \exp (-\frac{\lambda (y - \mu )^2}{2\mu ^2y})\]
 \[f(y) = \exp (-\frac{\lambda (y - \mu )^2)}{2\mu ^2y} - \frac{1}{2} \log (\frac{2\pi y^3}{\lambda}))\]
 \[f(y) = \exp (-\frac{\lambda (y^2 - 2y\mu + \mu ^2)}{2\mu ^2y} - \frac{1}{2} \log (\frac{2\pi y^3}{\lambda}))\]
 \[f(y) = \exp (\lambda [-\frac{y}{2\mu ^2} + \frac{1}{\mu}] - \frac{\lambda }{2y} - \frac {1}{2}\log(\frac {2\pi y^3}{\lambda}))\]
-\[f(y) = \exp (\frac {[-\frac{y}{\mu ^2} + \frac{2}{\mu}]}{\frac {1}{2 \lambda}} - \frac{\lambda }{2y} - \frac {1}{2}\log(\frac {2\pi y^3}{\lambda}))\]
+\[f(y) = \exp (\frac {[-\frac{y}{2\mu ^2} + \frac{1}{\mu}]}{\frac {1}{\lambda}} - \frac{\lambda }{2y} - \frac {1}{2}\log(\frac {2\pi y^3}{\lambda}))\]
 
-This is in the exponential form, that is, $\theta = - \frac {1} {\mu ^2}$,$a(\phi) = \frac {1}{\lambda} = \frac {1}{2 \phi}$ ,$b(\theta) = - \frac {2}{\mu} = -2\sqrt{\theta}$, 
+This is in the exponential form, that is, $\theta = - \frac {1} {2 \mu ^2}$,$a(\phi) = \frac {1}{\lambda} = { \phi}$ ,$b(\theta) = - \frac {1}{\mu} = -\sqrt{2 \theta}$, 
 $c(y,\theta) = - \frac{\lambda}{2y} - \frac{1}{2}\log(\frac{2\pi y^3}{\lambda}) = - \frac{1}{y\phi} - \frac{1}{2}\log(2\pi \phi y^3)$ 
 
-b^' (??)=1/???(-2??)=?? , which is E(Y). So, the canonical link function is g(E(Y)) which we take to be ??. So, the canonical link is 1/??^2 , which is equivalent to XB. The model is then 
-Y=XB+?? where Y follows a inverse Gaussian distribution with link function g(E(Y)) = 1/??^2 
+$b'(\theta) = {\sqrt {\frac{2}{\theta }}} = \mu$   , which is E(Y). So, the canonical link function is g(E(Y)) which we take to be $\theta$. So, the canonical link is proportional to  $\frac {1}{\mu ^2}$, which is equivalent to XB. The model is then 
+Y=XB+$\epsilon$ where Y follows a inverse Gaussian distribution with link function g(E(Y)) = 1/$\mu ^2$ 
 
 ```{r}
-invgauslin1<-glm(timesm~agem,family="inverse.gaussian")
+invgauslin1  <-  glm(timesm~agem,family="inverse.gaussian")
 summary(invgauslin1)
 ```
 Both are quite difficult to interpret by themselves, as the response variables are transformed via the link function. The predictions for the gamma are as follows: 
 ```{r}
 predict(gammalin1)
 
-pred1<-1/predict(gammalin1)
-pred2<-1/((2*predict(invgauslin1)))^.5
-pred3<-predict(lin1)
+pred1 <- 1/predict(gammalin1)
+pred2 <- 1/((2*predict(invgauslin1)))^.5
+pred3 <- predict(lin1)
 
 sum((pred1-timesm)^2)
 
@@ -94,10 +93,10 @@ Here, we can see the sum squared error of the transformed predictions from the m
 Below, I do the same thing, except using the identity function. This produces more easily interpretable coefficients, but they are less efficient at predicting the model. That is, when we take the sum of squares, the identity links are less successful at determining the response. 
 
 ```{r}
-gammalin2<-glm(timesm~agem,family="Gamma"(link="identity"))
+gammalin2 <- glm(timesm~agem,family="Gamma"(link="identity"))
 summary(gammalin2)
 
-invgauslin2<-glm(timesm~agem,family="inverse.gaussian"(link=identity))
+invgauslin2 <- glm(timesm~agem,family="inverse.gaussian"(link=identity))
 summary(invgauslin2)
 predict(gammalin2)
 
