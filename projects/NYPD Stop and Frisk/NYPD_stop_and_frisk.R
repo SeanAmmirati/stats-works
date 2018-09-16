@@ -108,10 +108,10 @@ plot(stepwiselogmodel)
 
 
 fit1 <- predict(stepwiselogmodel,newdata = mydata.test,type = "response")
-fitted <- ifelse(fit1 > .5,1,0)
-sum(fitted)/nrow(mydata.test)
+fit1 <- ifelse(fit1 > .5,1,0)
+sum(fit1)/nrow(mydata.test)
 
-table1 <- table(fitted,arrest.test)
+table1 <- table(fit1,arrest.test)
 misclasserrorstepwise <- 1 - sum(diag(table1))/nrow(mydata.test)
 table1
 round(misclasserrorstepwise,3)
