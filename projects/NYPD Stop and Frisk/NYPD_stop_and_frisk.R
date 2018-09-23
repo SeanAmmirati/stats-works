@@ -6,7 +6,12 @@ library(ggplot2)
 library(class)
 
 set.seed(43)
-mydata  <-  read.csv("../Data/2015_sqf_csv.csv")
+download_link <- 'http://www.nyc.gov/html/nypd/downloads/zip/analysis_and_planning/2015_sqf_csv.zip'
+tmp <- tempfile()
+download.file(download_link, tmp)
+mydata <- read.csv(unz(tmp, '2015_sqf_csv.csv'))
+unlink(tmp)
+
 sum(is.na(mydata))
 nrow(mydata)*ncol(mydata)
 names(mydata)
