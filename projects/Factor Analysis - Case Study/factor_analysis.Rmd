@@ -244,11 +244,14 @@ We first make an initial estimate of the $h_i$s, and use this to account for the
 ```{r}
 hinit <- 1 - 1/diag(solve(R))
 psiint <- 1 - hinit
-diag(psiint,nrow = 40)
+hinit
+psiint
+head(diag(psiint,nrow = 40))
 
 
 New <- R - diag(psiint,nrow = 40)
-eigen(New)
+eigs <- eigen(New)
+lapply(eigs, function(x) head(x))
 ```
 We will then use this new matrix to compute our eigenvalues and vectors, and subsequently create our new loadings matrix. In a similar way, we will determine the specific variances and communalities, and then rotate the loadings matrix. 
 
