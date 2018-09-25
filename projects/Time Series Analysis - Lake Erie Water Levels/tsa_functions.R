@@ -1,6 +1,8 @@
-## Functions used in Time Series Project -- Lake Erie Water Levels
-
-require(randomcoloR)
+## Functions used in Time Series Project -- Lake Erie Water Levelss
+if (!require(randomcoloR)) {
+  install.packages('randomcoloR')
+  require('randomcoloR')
+}
 
 sse<-function(pred, data){
   true<-as.vector(data)
