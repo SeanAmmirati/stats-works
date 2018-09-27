@@ -1,5 +1,15 @@
-```{r}
+```{r, include=FALSE}
 source('./tsa_functions.R')
+
+packages_not_in_conda <- c('rdatamarket','prophet','TSA','lubridate')
+
+for (package in packages_not_in_conda) {
+  if (!require(package, character.only = TRUE)) { 
+    install.packages(package)
+    require(package)
+  }
+}
+
 library(rdatamarket)
 library(forecast)
 library(prophet)
@@ -9,28 +19,46 @@ library(lubridate)
 ```
 ---
 title: "Time Series: Lake Erie"
-knit: markdowntemplates::to_jupyter
 author: "Sean Ammirati"
 date: "October 22, 2016"
+output: html_document
 ---
-For more information, please see the Word or PDF files included in this folder. 
+The dataset I have chosen is a monthly recording of water levels in Lake Erie from the period between 1921 and 1970. The dataset is available at the following link: https://datamarket.com/data/set/22pw/monthly-lake-erie-levels-1921-1970#!ds=22pw&display=line&numberformat=n1.  Below is a plot of the time series over time: 
 
 # Importing the data
-```{r}
+```{r, include=FALSE}
 lkerie<-dmseries("https://datamarket.com/data/set/22pw/monthly-lake-erie-levels-1921-1970#!ds=22pw&display=line")
+lkerie <- as.ts(lkerie,frequency=12)
+```
+```{r}
+plot(lkerie)
+```
+We can see that the water levels seem to jump somewhat cyclically over time. This is typical of physical processes, and thus it is an interesting dataset to analyze. We see that over time the water levels decreased initially, and then began to increase again somewhat steadily from the 1940s onwards. While there is clearly a seasonal component at work here, it is not so clear how this seasonal component operates initially from the plot above. 
+
+I first begin by fitting a seasonal means with linear trend model to summarize and get an idea of the seasonal component of the data. I then built four models – the Holt Winters model, an SARIMA model, a model decomposing the seasonal component with spectral analysis, and a model from the prophet package. I then compare the models using the sum squared errors and plotting them against the true data values.
+
+I have separated the time series into two sets, as shown below. These are the training and test sets I will be using to evaluate how effective each of the models I fit are at estimating the true time series. The following code initializes the dataset as a time series, and creates a training and test dataset to perform analysis on. The test set is the last 12 observations, or one year, of the time series. 
+
+
+```{r}
 length(lkerie)
 
-lkerietrain<-as.ts(lkerie[1:(length(lkerie)-12)])
+lkerietrain<-ts(lkerie[1:(length(lkerie)-12)], frequency=12)
 lkerietest<-lkerie[(length(lkerie)-11):length(lkerie)]
 tail(lkerietrain)
 
-lkerie<-as.ts(lkerie)
-head(lkerie)
 ```
+After this initialization, the dataset is in good condition and doesn’t need to be cleaned any further. The first 6 values of the time series are shown below:
+
 # Seasonal Means Model
+The first model I fit was a seasonal means model, to get a sense of the seasonality of the dataset. Although this is a simplistic model that will not be used to model the data itself, it provides good insight into the seasonal nature of the time series. Below is a plot of the time series with the months added to the plot:
+
 ```{r}
 season.<-season(lkerie)
 time.<-time(lkerie)
+```
+We can see that the time series tends to peak around the summer time, and has troughs in the colder months. The seasonal means model gives us more insight into how this is occurring: 
+```{r}
 seasonmean<-lm(lkerie~season.+time.)
 
 summary(seasonmean)
@@ -38,17 +66,26 @@ summary(seasonmean)
 plot(lkerie)
 points(y=lkerie,x=time(lkerie),pch=as.vector(season(lkerie)))
 ```
-# Decomposition
+Indeed, we can see that the seasonal means model has quite a bit of significant components, suggesting that there is a good amount of seasonality in the data. However, this is not consistent, with some months having insignificant values. In general, we can see that the summer months have positive coefficients, while the colder months (which are not nearly as significant) sit somewhere close to zero. This agrees with the earlier findings from the time series plot. 
+
+Next, I perform a decomposition of the time series, to see how this package can break up the time series into seasonal, trend and random components. 
+
 ```{r}
 madecomp<-decompose(lkerie)
 plot(madecomp)
 madecomp$seasonal[1:12]
 ```
-#HoltWinters
+) 
+We can see again that there is clearly a seasonal component to the time series. We can also see the general trend of decreasing and increasing. When these components are removed, we see a relatively stationary random process. This cyclical nature of the seasonality lead me to consider spectral analysis. However, first we will look at two other models which can deal with seasonality – the Holt Winters’ Model and a seasonal ARIMA model. 
+
+#Holt Winters' Model
+I use two Holt-Winters’ Models (an additive and multiplicative model) to model the data. Below, I fit the two models, and plot the resulting fits. The Holt-Winters models both consider seasonal components, although the multiplicative model and additive model come up with different quantities for the coefficients (see the appendix for the summaries). However, the smoothing parameters are relatively the same in character, with alpha=0.8973698 beta=0.003048736 and gamma: 1. This indicates that the level and seasonality are smoothing based on observations in the distant past (with gamma = 1 meaning it is considering only the previous observations), while a small beta indicates that it is using the trend of only the nearest values. I have plotted one of the models below, but the other is very similar in nature. However, as we will see later, the prediction error is quite high – (and the prediction error for the multiplicative model is, predictably, much higher). 
 ```{r}
 hw1<-HoltWinters(lkerietrain)
 hw1
 plot(hw1)
+```
+```{r, include=FALSE}
 
 hw2<-HoltWinters(lkerietrain,beta=NULL,seasonal="multiplicative")
 hw2
@@ -64,8 +101,10 @@ ssehw1<-sse(hw1pred[,1], lkerietest)
 ssehw2<-sse(hw2pred[,1], lkerietest)
 ```
 
-# SARIMA 
-```{r}
+# SARIMA Modeling
+
+Next, we will turn to using an ARIMA (or in this case, a seasonal ARIMA model) to model and predict the data. The above time series is not stationary, so we must transform it. The transformation which creates an optimal situation for ARIMA modeling is one that is roughly stationary. After looking through various transformations (including logarithmic, differencing and BoxCox transformations), I settled upon a differencing of logs. By differencing the logarithms of the model, we get a result that is very close to stationary. The resulting plot is plotted below. 
+```{r, include=FALSE}
 ts.plot(lkerie)
 ts.plot(log(lkerie))
 ts.plot(diff(lkerie))
@@ -76,22 +115,43 @@ BxCx<-BoxCox.ar(lkerie)
 root<-BxCx$mle
 ts.plot(diff(lkerie^(root)))
 
+```
+```{r}
 lkerietrain.trans<-diff(log(lkerie))
-
 plot(lkerietrain.trans)
+```
+Except for the one outlier just before 1940, we can see that this time series is now stationary, and we can proceed to fit ARIMA models to it. 
+
+Using the ACF, PACF and EACF plots, we can see that it will be difficult to find a fitting ARMA (without a seasonal component) model that fits the data well. Since we believe there is a good degree of seasonality to this data, this is not surprising. In the plots below of the ACF and PACF, we see some sine and cosine patterns in the autocorrelations. This indicates a seasonal model may be more appropriate than an ordinary ARMA or ARIMA model. 
+
+```{r, include=FALSE}
 mean(lkerie)
 mean(diff(lkerie))
 mean(diff(log(lkerie)),lag=12)
 mean(diff(lkerie^root))
-
-a<-armasubsets(lkerietrain.trans,nar=12,nma=12)
-plot(a)
-auto.arima(lkerietrain.trans)
-get.best.arima(lkerietrain.trans,maxord=c(2,2,2,2,2,2))
-
-
+```
+```{r}
 acf(lkerietrain.trans)
 pacf(lkerietrain.trans)
+```
+Using the arima.subsets function gives us a good idea of the seasonality and we can better infer the best models to use based on this.  
+```{r}
+a <- armasubsets(lkerietrain.trans,nar=12,nma=12)
+plot(a)
+```
+We can see the most significant lags are those at times 1, 11, and 12 for the AR component, and lag 12 for the MA component. Using the auto.arima and get.best.arima functions, we can get the optimal model based on the AIC. 
+```{r}
+auto.arima(lkerietrain.trans)
+get.best.arima(lkerietrain.trans,maxord=c(2,2,2,2,2,2))
+```
+The get.best.arima’s model produces the minimal AIC, and therefore is the optimal model. We can see it is very similar to the models determined by the subsets, and adds an MA component to the seasonal part of the ARIMA model. I consider both models found (that is, SARIMA[1,0,0]x[2,0,2] and SARIMA[0,0,1]x[2,0,2]). In both models, all of the terms are significant, so there is no need to remove any. 
+
+Looking at the residuals of these ARIMA models, we can see that they are roughly normally distributed, with the outliers skewing it somewhat. This is encouraging. Unfortunately, the residuals (and squared residuals) do seem to still exhibit autocorrelation.  However, the ACF and PACF squared do not appear to have drastically more correlated values in the squared case. I have included the Q-Q plot and the ACF of the residuals below. For brevity, 
+
+I have omitted the PACF, but it exhibits similar results. 
+Regardless, this result is disappointing. This led me to use spectral analysis to interpret the seasonality, as I believed there was some underlying seasonal pattern that could not be found using these standard SARIMA processes. 
+
+```{r, include=FALSE}
 eacf(lkerietrain.trans)
 
 sarima1<-arima(log(lkerietrain), order = c(0, 1, 1), seasonal = list(order = c(2, 0, 2), frequency(lkerietrain)), 
@@ -123,12 +183,14 @@ ssesarima2<-sse(predarima2, lkerietest)
 
 plot(residuals(sarima1))
 plot(residuals(sarima2))
+```
 
+```{r}
 qqnorm(y=residuals(sarima1))
-qqnorm(y=residuals(sarima2)) 
-
 acf(residuals(sarima1))
 acf(residuals(sarima1)^2)
+```
+```{r, include=FALSE}
 pacf(residuals(sarima1))
 pacf(residuals(sarima1)^2)
 
@@ -138,7 +200,12 @@ pacf(residuals(sarima2))
 pacf(residuals(sarima2)^2)
 ```
 
-# Spectral Analysis
+# Spectral Analysis + ARIMA
+
+The cyclical component of the time series led me to believe that using spectral analysis to analyze the seasonality of the data may be fruitful. The method I used here was to find the highest frequencies on the periodogram, and use these to model the seasonal components. 
+
+Using the ten frequencies with this highest spectrum on the log of the time series, I created twenty variables with a sin/cosine function pertaining to each. I then performed linear regression on the transformed time series with these ten values to create a harmonic model.
+
 ```{r}
 spec.per<-spec(log(lkerietrain))
 frequencies<-spec.per$freq[order(spec.per$spec,decreasing=TRUE)]
@@ -170,12 +237,16 @@ d10<-sin(2*pi*frequencies[10]*t)
 
 spec.m1<-lm(log(lkerietrain)~cc1+c2+c3+c4+c5+c6+c7+c8+c9+c10+d1+d2+d3+d4+d5+d6+d7+d8+d9+d10+t)
 summary(spec.m1)
+```
 
+The results here are very significant, with a very high R-squared (.8804). We can see that the plot below produced a moderately good fit, considering it is just a sum of sine and cosine waves. However, the danger of overfitting is present. To mitigate this issue, I used the training data and a ARIMA (1,0,1) to find the sum squared errors related to different amounts of frequencies. We can see that the error plateaus at 2 frequencies. I used frequencies of 2 and 4 to create these fits. I then used these frequencies as a prediction of the seasonal components. 
+
+```{r}
 plot(exp(fitted(spec.m1)),type="l",col="blue")
 lines(t,lkerietrain)
+```
 
-
-
+```{r, include=FALSE}
 test<-cbind(c(589:600),cos(2*pi*frequencies[1]*(589:600)),
             sin(2*pi*frequencies[1]*(589:600)),
             cos(2*pi*frequencies[2]*(589:600)),
@@ -201,7 +272,8 @@ colnames(test)=c("t","cc1","d1","c2","d2","c3","d3","c4","d4","c5","d5","c6","d6
 
 plot(lkerietrain)
 models<-list()
-
+```
+```{r}
 for(i in 1:10){
   beg<-"cc1+d1"
   if(i>1){
@@ -217,17 +289,21 @@ for(i in 1:10){
   print(i)
   print(sum(((arimasub$fitted+pre)-lkerietrain)^2))
 }
-
-
+```
+```{r, include=FALSE}
 summary(models[[2]])
 summary(models[[4]])##c4 is insignificant, remove it 
 models[[4]]<-lm(log(lkerietrain)~cc1+c2+c3+d1+d2+d3+d4+t)
-
+```
+Using the models with 2 and 4 frequencies, I subtracted these fitted spectral models from the original time series. As the plots are very similar in nature, I will only produce one of them here: 
+```{r}
 sub1<-lkerietrain-exp(fitted(models[[2]]))
 sub2<-lkerietrain-exp(fitted(models[[4]]))
 plot(sub1)
 plot(sub2)
-
+```
+This produced two time series that are very reminiscent of random noise, which is what is expected, as this was to remove the seasonal component from the data. After a similar analysis to this data to the above SARIMA models, I arrived at two models to fit this ‘white noise’ like data, SARIMA[1,0,1]x[0,1,1] for the first and SARIMA[2,1,1]x[1,0,1] for the second (the code is included in the appendix, but this result had the smallest AIC from the get.best.arima() function.) 
+```{r, include=FALSE}
 acf(sub1)
 pacf(sub1)
 acf(sub2)
@@ -247,25 +323,33 @@ get.best.arima(sub2,c(2,2,2,2,2,2))
 
 a1spec1<-Arima(sub1,c(1,0,1))
 a2spec1<-auto.arima(sub1)
-a3spec1<-Arima(y = sub1, order = c(1, 0, 1), seasonal = c(0, 1, 1), 
-               method = "CSS")
+
 a1spec2<-Arima(sub2,c(1,0,1))
 a2spec2<-auto.arima(sub2)
+```{r}
+a3spec1<-Arima(y = sub1, order = c(1, 0, 1), seasonal = c(0, 1, 1), 
+               method = "CSS")
 a3spec2<-Arima(y = sub2, order = c(2, 1, 1), seasonal = c(1, 0, 1), 
                method = "CSS")
-
+```
+The plots below show that the residuals for the first model are relatively normal and that they do not exhibit very high auto-correlation or partial auto-correlation in the squared cases, which suggests that a these ARIMA models are sufficient, and a GARCH model is unneccessary. 
+```{r, include=FALSE}
 resid1<-residuals(a3spec1)
 resid2<-residuals(a3spec2)
-
+```
+```{r}
 plot(resid1)
-plot(resid2)
-
 acf(resid1)
 acf(resid1^2)
+```
+```{r, include=FALSE}
+plot(resid2)
 pacf(resid2)
 pacf(resid2^2)
+```
+```{r, include=FALSE}
 
-
+# Predictions
 specpred1<-exp(predict(models[[2]],newdata=as.data.frame(test)))
 specpred2<-exp(predict(models[[4]],newdata=as.data.frame(test)))
 
@@ -283,18 +367,9 @@ ssesp2<-sse(finalpred2, lkerietest)
 
 ssesp1/12
 ssesp2/12
-
-plot(x=time(lkerie),c(lkerietrain,finalpred1),ty="l",main="Forecast of Spec 1",xlab="Time",ylab="Water Level")
-lines(x=c(time(lkerie)),c(lkerietrain,finalpred1+1.96*arimase1),lty="dashed",col="blue")
-lines(x=c(time(lkerie)),c(lkerietrain,finalpred1-1.96*arimase1),lty="dashed",col="blue")
-lines(lkerietrain,col="black")
-
-plot(x=time(lkerie),c(lkerietrain,finalpred2),ty="l",main="Forecast of Spec 2",xlab="Time",ylab="Water Level")
-lines(x=c(time(lkerie)),c(lkerietrain,finalpred2+1.96*arimase2),lty="dashed",col="red")
-lines(x=c(time(lkerie)),c(lkerietrain,finalpred2-1.96*arimase2),lty="dashed",col="red")
-lines(lkerietrain,col="black")
 ```
 # Prophet
+The final model that I considered was one produced by Facebook’s prophet package for R. All that is needed is to initialize the data and set it up appropriately. Although the prophet package is somewhat of a “black box” – and it is most effective on daily data – I thought it would be interesting to include it and see how it performs as compared with the other models. 
 ```{r}
 ds <- as.Date.ts(lkerietrain)
 y<-as.numeric((log(lkerietrain)))
@@ -308,21 +383,21 @@ predproph<-exp((forecast$yhat)[(length(forecast$yhat)-11):length(forecast$yhat)]
 confintup<-exp((forecast$yhat_upper)[(length(forecast$yhat)-11):length(forecast$yhat)])
 confintlow<-confintup<-exp((forecast$yhat_lower)[(length(forecast$yhat)-11):length(forecast$yhat)])
 
-plot(x=time(lkerie),c(lkerietrain,predproph),type="l",col="red",main="Prophet forecasts",xlab="Time",ylab="Water Level")
-lines(x=c(time(lkerie)),c(lkerietrain,confintup),type="l",lty="dashed",col="red")
-lines(x=c(time(lkerie)),c(lkerietrain,confintlow),type="l",lty="dashed",col="red")
-lines(lkerietrain)
-
 sseproph<-sse(predproph, lkerietest)
 ```
+# Results
+Below is a table representing the sum squared errors of each of the models when forecasting for the next 12 months. These are the errors of each model in comparison to the test data. 
 
-# Comparing Results
+
+
 ```{r}
 results<-data.frame(c(ssehw1,ssehw2,ssesarima1,ssesarima2,ssesp1,ssesp2,sseproph))
 colnames(results)<-"SSE"
 rownames(results)<-(c("HW 1","HW 2","SARIMA 1","SARIMA 2","Spec 1","Spec 2","Prophet"))
 results
-
+```
+We can see that the models which use the frequencies from spectral analysis to remove the seasonal components are the best at predicting the data. This makes sense, as many geophysical processes can be modeled well using the sin and cosine waves in spectral analysis. Besides these two models, the SARIMA 2 model predicted with the least error. Below, I produce a plot which shows all the models’ predictions as well as the true values for the time series. 
+```{r}
 length(lkerie)
 range<-560:600
 plot(time(lkerie)[range],lkerie[range],ty="l",xlab="Time",ylab="Water Level",main="Overview of Models Used")
@@ -335,7 +410,23 @@ addplot(hw2pred,range,colors2[6])
 addplot(predproph,range,colors2[7])
 lines(lkerie[range])
 
-
 legend('topleft', c("True","Spec 1","Spec 2","SARIMA 1","SARIMA 2","HW 1","HW 2","Prophet"),col=c("black",colors2), 
        lty="dashed", bty='n', cex=.75)
-``` 
+```
+
+Finally, I produce graphs with confidence intervals for the most effective models of each type. 
+
+```{r}
+plot(forecast(hw1,12))
+
+plot(x=time(lkerie),c(lkerietrain,finalpred1),ty="l",main="Forecast of Spec 1",xlab="Time",ylab="Water Level")
+lines(x=c(time(lkerie)),c(lkerietrain,finalpred1+1.96*arimase1),lty="dashed",col="blue")
+lines(x=c(time(lkerie)),c(lkerietrain,finalpred1-1.96*arimase1),lty="dashed",col="blue")
+lines(lkerietrain,col="black")
+
+ts.plot(lkerietrain,predarima2,col="blue",main="SARIMA 2",xlab="Time",ylab="Water Level")
+lines(x=c(time(lkerie)),c(lkerietrain,(predarima2+1.96*searima2)),col="blue",lty="dashed")
+lines(x=c(time(lkerie)),c(lkerietrain,(predarima2-1.96*searima2)),col="blue",lty="dashed")
+lines(lkerietrain)
+```
+ 
